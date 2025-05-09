@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The color of sound</title>
+    <link id="favicon" rel="icon" type="image/x-icon" href="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"> <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif; /* Tailwind uses a nice sans-serif stack by default */
+        }
+        /* Custom scrollbar for webkit browsers for a cleaner look */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+        /* Ensure canvas is sharp on high DPI displays */
+        canvas {
+            image-rendering: -moz-crisp-edges;
+            image-rendering: -webkit-crisp-edges;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+        }
+    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-gray-50 text-gray-800">
+    <div class="container mx-auto p-4 md:p-8 min-h-screen flex flex-col">
+        <header class="mb-8">
+            <h1 class="text-3xl sm:text-4xl font-bold text-center text-transparent bg-clip-text bg-gradient-to-r from-purple-600 via-pink-600 to-blue-600">
+                The color of sound
+            </h1>
+            <p id="statusMessage" class="text-center text-sm text-gray-500 mt-2">Select an audio source to begin.</p>
+        </header>
+
+        <main class="flex-grow">
+            <section class="mb-6 p-4 sm:p-6 bg-white rounded-xl shadow-lg">
+                <div class="grid md:grid-cols-2 gap-6 items-start">
+                    <div>
+                        <h2 class="text-xl font-semibold mb-3 text-gray-700">Input Source</h2>
+                        <div class="space-y-3">
+                            <button id="micButton" class="w-full bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white font-semibold py-2.5 px-4 rounded-lg shadow-md transition-all duration-150 ease-in-out transform hover:scale-105">
+                                Use Microphone
+                            </button>
+                            <div>
+                                <label for="fileInput" class="block text-sm font-medium text-gray-600 mb-1">Or upload an audio file:</label>
+                                <input type="file" id="fileInput" accept="audio/*" class="block w-full text-sm text-slate-500
+                                  file:mr-4 file:py-2 file:px-4
+                                  file:rounded-lg file:border-0
+                                  file:text-sm file:font-semibold
+                                  file:bg-violet-50 file:text-violet-700
+                                  hover:file:bg-violet-100 transition-colors duration-150 cursor-pointer
+                                ">
+                            </div>
+                            <audio id="audioPlayer" controls class="mt-2 w-full rounded-lg"></audio>
+                        </div>
+                    </div>
+                    <div>
+                        <h2 class="text-xl font-semibold mb-3 text-gray-700">Output Color</h2>
+                        <div id="colorBox" class="w-full h-32 sm:h-40 rounded-lg shadow-inner border-2 border-gray-200 transition-colors duration-300 ease-in-out" style="background-color: #1f2937;"></div>
+                        <p class="text-xs text-gray-500 mt-1 text-center">Color derived from audio frequencies</p>
+                    </div>
+                </div>
+            </section>
+
+            <section class="mb-6 p-4 sm:p-6 bg-white rounded-xl shadow-lg">
+                <h2 class="text-xl font-semibold mb-4 text-gray-700">Analysis & Color Controls</h2>
+                <div class="grid sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-4">
+                    <div>
+                        <label for="powerThreshold" class="block text-sm font-medium text-gray-600">Power Threshold: <span id="powerThresholdValue" class="font-bold text-indigo-600">50</span></label>
+                        <input type="range" id="powerThreshold" min="0" max="255" value="50" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600">
+                    </div>
+                    <div>
+                        <label for="minFreq" class="block text-sm font-medium text-gray-600">Min Frequency (Hz): <span id="minFreqValue" class="font-bold text-indigo-600">20</span></label>
+                        <input type="range" id="minFreq" min="20" max="20000" value="20" step="10" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600">
+                    </div>
+                    <div>
+                        <label for="maxFreq" class="block text-sm font-medium text-gray-600">Max Frequency (Hz): <span id="maxFreqValue" class="font-bold text-indigo-600">5000</span></label>
+                        <input type="range" id="maxFreq" min="100" max="20000" value="5000" step="10" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600">
+                    </div>
+                    <div>
+                        <label for="smoothingFactor" class="block text-sm font-medium text-gray-600">Smoothing Factor: <span id="smoothingFactorValue" class="font-bold text-indigo-600">0.8</span></label>
+                        <input type="range" id="smoothingFactor" min="0" max="0.99" value="0.8" step="0.01" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600">
+                    </div>
+                </div>
+            </section>
+
+            <section class="p-4 sm:p-6 bg-white rounded-xl shadow-lg">
+                <div class="grid md:grid-cols-2 gap-6">
+                    <div>
+                        <h2 class="text-xl font-semibold mb-3 text-gray-700">Waveform (Time Domain)</h2>
+                        <canvas id="timeDomainCanvas" class="w-full h-64 bg-gray-100 rounded-lg shadow-inner border border-gray-200"></canvas>
+                    </div>
+                    <div>
+                        <h2 class="text-xl font-semibold mb-3 text-gray-700">Spectrum (Frequency Domain)</h2>
+                        <canvas id="freqDomainCanvas" class="w-full h-64 bg-gray-100 rounded-lg shadow-inner border border-gray-200"></canvas>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        // --- Global Variables ---
+        let audioContext;
+        let analyser;
+        let sourceNode = null;
+        let microphoneStream = null;
+        let rafId = null;
+        let isMicActive = false;
+
+        const FFT_SIZE = 2048; // Standard FFT size
+        let frequencyDataArray; // Stores frequency data
+        let timeDomainDataArray; // Stores waveform data
+
+        // --- DOM Elements ---
+        const micButton = document.getElementById('micButton');
+        const fileInput = document.getElementById('fileInput');
+        const audioPlayer = document.getElementById('audioPlayer');
+        const colorBox = document.getElementById('colorBox');
+        const statusMessage = document.getElementById('statusMessage');
+        const faviconLink = document.getElementById('favicon'); 
+
+        const powerThresholdSlider = document.getElementById('powerThreshold');
+        const minFreqSlider = document.getElementById('minFreq');
+        const maxFreqSlider = document.getElementById('maxFreq');
+        const smoothingFactorSlider = document.getElementById('smoothingFactor'); // New slider element
+        const powerThresholdValueSpan = document.getElementById('powerThresholdValue');
+        const minFreqValueSpan = document.getElementById('minFreqValue');
+        const maxFreqValueSpan = document.getElementById('maxFreqValue');
+        const smoothingFactorValueSpan = document.getElementById('smoothingFactorValue'); // New span for value
+
+        const timeDomainCanvas = document.getElementById('timeDomainCanvas');
+        const freqDomainCanvas = document.getElementById('freqDomainCanvas');
+        let timeDomainCtx, freqDomainCtx; 
+
+        // --- Default Slider Values ---
+        let powerThreshold = parseInt(powerThresholdSlider.value);
+        let minFreqColorMap = parseInt(minFreqSlider.value);
+        let maxFreqColorMap = parseInt(maxFreqSlider.value);
+        let smoothingFactor = parseFloat(smoothingFactorSlider.value); // Default smoothing factor
+
+        // --- Initialization ---
+        window.addEventListener('load', () => {
+            setupCanvas(timeDomainCanvas);
+            setupCanvas(freqDomainCanvas);
+            timeDomainCtx = timeDomainCanvas.getContext('2d');
+            freqDomainCtx = freqDomainCanvas.getContext('2d');
+            clearVisualizations(); 
+            updateFavicon(31, 41, 55); 
+            updateSliderValueDisplays(); // Initialize all slider display values
+        });
+        
+        function setupCanvas(canvasElement) {
+            const dpr = window.devicePixelRatio || 1; 
+            const rect = canvasElement.getBoundingClientRect(); 
+            canvasElement.width = rect.width * dpr;
+            canvasElement.height = rect.height * dpr;
+            const ctx = canvasElement.getContext('2d');
+            ctx.scale(dpr, dpr); 
+            canvasElement.style.width = `${rect.width}px`;
+            canvasElement.style.height = `${rect.height}px`;
+        }
+
+        let resizeTimeout;
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(() => {
+                setupCanvas(timeDomainCanvas);
+                setupCanvas(freqDomainCanvas);
+                if (rafId) { 
+                    drawTimeDomain(); 
+                    drawFrequencyDomain();
+                } else {
+                    clearVisualizations();
+                }
+            }, 250); 
+        });
+
+        function initAudioContext() {
+            if (!audioContext) { 
+                try {
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    analyser = audioContext.createAnalyser();
+                    analyser.fftSize = FFT_SIZE;
+                    analyser.smoothingTimeConstant = smoothingFactor; // Set initial smoothing factor
+
+                    frequencyDataArray = new Uint8Array(analyser.frequencyBinCount);
+                    timeDomainDataArray = new Uint8Array(analyser.fftSize);
+
+                    const nyquist = audioContext.sampleRate / 2;
+                    minFreqSlider.max = nyquist;
+                    maxFreqSlider.max = nyquist;
+                    
+                    if (parseFloat(minFreqSlider.value) > nyquist) minFreqSlider.value = nyquist;
+                    if (parseFloat(maxFreqSlider.value) > nyquist) maxFreqSlider.value = nyquist;
+                    
+                    minFreqColorMap = parseFloat(minFreqSlider.value);
+                    maxFreqColorMap = parseFloat(maxFreqSlider.value);
+                    updateSliderValueDisplays();
+
+                } catch (e) {
+                    console.error("Error initializing AudioContext:", e);
+                    statusMessage.textContent = "AudioContext not supported or an error occurred.";
+                    alert("AudioContext not supported by your browser or an error occurred. Please try a different browser."); 
+                    return false;
+                }
+            }
+            if (audioContext.state === 'suspended') { 
+                audioContext.resume();
+            }
+            return true;
+        }
+
+        // --- Event Listeners for Controls ---
+        powerThresholdSlider.addEventListener('input', (e) => {
+            powerThreshold = parseInt(e.target.value);
+            updateSliderValueDisplays();
+        });
+        minFreqSlider.addEventListener('input', (e) => {
+            let newMinFreq = parseFloat(e.target.value);
+            if (newMinFreq >= maxFreqColorMap) {
+                newMinFreq = Math.max(parseFloat(minFreqSlider.min), maxFreqColorMap - 10);
+                e.target.value = newMinFreq;
+            }
+            minFreqColorMap = newMinFreq;
+            maxFreqSlider.min = newMinFreq + 10; 
+            updateSliderValueDisplays();
+        });
+        maxFreqSlider.addEventListener('input', (e) => {
+            let newMaxFreq = parseFloat(e.target.value);
+            if (newMaxFreq <= minFreqColorMap) {
+                newMaxFreq = Math.min(parseFloat(maxFreqSlider.max), minFreqColorMap + 10);
+                e.target.value = newMaxFreq;
+            }
+            maxFreqColorMap = newMaxFreq;
+            minFreqSlider.max = newMaxFreq - 10; 
+            updateSliderValueDisplays();
+        });
+        smoothingFactorSlider.addEventListener('input', (e) => { // Event listener for new slider
+            smoothingFactor = parseFloat(e.target.value);
+            if (analyser) { // Update analyser if it exists
+                analyser.smoothingTimeConstant = smoothingFactor;
+            }
+            updateSliderValueDisplays();
+        });
+
+
+        function updateSliderValueDisplays() {
+            powerThresholdValueSpan.textContent = powerThreshold;
+            minFreqValueSpan.textContent = minFreqColorMap.toFixed(0);
+            maxFreqValueSpan.textContent = maxFreqColorMap.toFixed(0);
+            smoothingFactorValueSpan.textContent = smoothingFactor.toFixed(2); // Display smoothing factor with 2 decimal places
+        }
+        
+        micButton.addEventListener('click', handleMicButtonClick);
+        fileInput.addEventListener('change', handleFileSelect);
+
+        audioPlayer.addEventListener('play', () => {
+            if (audioContext && audioContext.state === 'suspended') {
+                audioContext.resume();
+            }
+            if (sourceNode && sourceNode.mediaElement && !rafId) {
+                 if (!analyser || !analyser.context) { 
+                    if(!initAudioContext()) return;
+                    if (sourceNode.mediaElement !== audioPlayer || !sourceNode.context) { 
+                        if(sourceNode.disconnect) sourceNode.disconnect();
+                        sourceNode = audioContext.createMediaElementSource(audioPlayer);
+                    }
+                    sourceNode.connect(analyser);
+                    if (audioContext.destination) analyser.connect(audioContext.destination);
+                 }
+                visualize();
+            }
+        });
+        audioPlayer.addEventListener('pause', stopVisualization);
+        audioPlayer.addEventListener('ended', stopVisualization);
+
+        function handleMicButtonClick() {
+            if (!initAudioContext()) return; 
+            if (isMicActive) {
+                stopMicrophone();
+            } else {
+                startMicrophone();
+            }
+        }
+
+        async function startMicrophone() {
+            try {
+                audioPlayer.pause(); 
+                if (sourceNode && typeof sourceNode.disconnect === 'function') {
+                    sourceNode.disconnect(); 
+                }
+                microphoneStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+                sourceNode = audioContext.createMediaStreamSource(microphoneStream);
+                sourceNode.connect(analyser);
+                if (analyser) analyser.smoothingTimeConstant = smoothingFactor; // Ensure smoothing is applied
+
+                isMicActive = true;
+                micButton.textContent = 'Stop Microphone';
+                micButton.classList.replace('from-blue-500', 'from-red-500');
+                micButton.classList.replace('to-indigo-600', 'to-pink-600');
+                micButton.classList.replace('hover:from-blue-600', 'hover:from-red-600');
+                micButton.classList.replace('hover:to-indigo-700', 'hover:to-pink-700');
+                statusMessage.textContent = "Processing microphone input...";
+                fileInput.value = ''; 
+                visualize(); 
+            } catch (err) {
+                console.error('Error accessing microphone:', err);
+                statusMessage.textContent = "Error accessing microphone. Please grant permission.";
+                alert('Could not access microphone. Please ensure permission is granted and try again.');
+            }
+        }
+
+        function stopMicrophone() {
+            if (microphoneStream) {
+                microphoneStream.getTracks().forEach(track => track.stop()); 
+            }
+            if (sourceNode && typeof sourceNode.disconnect === 'function') {
+                sourceNode.disconnect();
+            }
+            sourceNode = null;
+            microphoneStream = null;
+            isMicActive = false;
+            micButton.textContent = 'Use Microphone';
+            micButton.classList.replace('from-red-500', 'from-blue-500');
+            micButton.classList.replace('to-pink-600', 'to-indigo-600');
+            micButton.classList.replace('hover:from-red-600', 'hover:from-blue-600');
+            micButton.classList.replace('hover:to-pink-700', 'hover:to-indigo-700');
+            statusMessage.textContent = "Microphone stopped. Select an audio source.";
+            stopVisualization();
+        }
+
+        function handleFileSelect(event) {
+            if (!initAudioContext()) return; 
+            if (isMicActive) {
+                stopMicrophone(); 
+            }
+            const file = event.target.files[0];
+            if (file) {
+                audioPlayer.src = URL.createObjectURL(file);
+                audioPlayer.load();
+                if (!sourceNode || !sourceNode.mediaElement || sourceNode.mediaElement !== audioPlayer) {
+                    if (sourceNode && typeof sourceNode.disconnect === 'function') {
+                        sourceNode.disconnect();
+                    }
+                    sourceNode = audioContext.createMediaElementSource(audioPlayer);
+                    sourceNode.connect(analyser);
+                }
+                if (analyser) analyser.smoothingTimeConstant = smoothingFactor; // Ensure smoothing is applied
+                if (audioContext.destination) {
+                   try { 
+                        analyser.disconnect(audioContext.destination); 
+                   } catch(e) { /* ignore */ }
+                   analyser.connect(audioContext.destination);
+                }
+                audioPlayer.oncanplaythrough = () => {
+                    statusMessage.textContent = `Playing: ${file.name}`;
+                };
+                audioPlayer.onerror = (e) => {
+                    statusMessage.textContent = "Error loading audio file.";
+                    console.error("Error with audio element:", e);
+                    alert("Could not play the selected audio file. It might be corrupted or in an unsupported format.");
+                };
+            }
+        }
+        
+        function stopVisualization() {
+            if (rafId) {
+                cancelAnimationFrame(rafId);
+                rafId = null;
+            }
+            if (!isMicActive && audioPlayer.paused) { 
+                 statusMessage.textContent = "Visualization stopped. Select an audio source or play the current file.";
+                 clearVisualizations();
+                 updateFavicon(31, 41, 55); 
+            }
+        }
+
+        function clearVisualizations() {
+            const dpr = window.devicePixelRatio || 1;
+            if (timeDomainCtx) {
+                timeDomainCtx.clearRect(0, 0, timeDomainCanvas.width / dpr, timeDomainCanvas.height / dpr);
+                timeDomainCtx.fillStyle = 'rgb(150,150,150)'; 
+                timeDomainCtx.textAlign = 'center';
+                timeDomainCtx.font = "14px Inter";
+                timeDomainCtx.fillText("No audio data", timeDomainCanvas.width / dpr / 2, timeDomainCanvas.height / dpr / 2);
+            }
+            if (freqDomainCtx) {
+                freqDomainCtx.clearRect(0, 0, freqDomainCanvas.width / dpr, freqDomainCanvas.height / dpr);
+                freqDomainCtx.fillStyle = 'rgb(150,150,150)';
+                freqDomainCtx.textAlign = 'center';
+                freqDomainCtx.font = "14px Inter";
+                freqDomainCtx.fillText("No audio data", freqDomainCanvas.width / dpr / 2, freqDomainCanvas.height / dpr / 2);
+            }
+            colorBox.style.backgroundColor = '#1f2937'; 
+        }
+
+        function visualize() {
+            if (!analyser) {
+                console.warn("Analyser not ready for visualization.");
+                if (!isMicActive && audioPlayer.paused) statusMessage.textContent = "Audio processing not ready.";
+                return;
+            }
+            analyser.getByteTimeDomainData(timeDomainDataArray); 
+            analyser.getByteFrequencyData(frequencyDataArray); 
+            drawTimeDomain();       
+            drawFrequencyDomain();  
+            updateColorBox();       
+            rafId = requestAnimationFrame(visualize); 
+        }
+
+        function drawTimeDomain() {
+            if (!timeDomainCtx) return;
+            const dpr = window.devicePixelRatio || 1;
+            const canvasWidth = timeDomainCanvas.width / dpr;
+            const canvasHeight = timeDomainCanvas.height / dpr;
+            timeDomainCtx.fillStyle = 'rgb(243, 244, 246)'; 
+            timeDomainCtx.fillRect(0, 0, canvasWidth, canvasHeight);
+            timeDomainCtx.lineWidth = 1.5; 
+            timeDomainCtx.strokeStyle = 'rgb(79, 70, 229)'; 
+            timeDomainCtx.beginPath();
+            const sliceWidth = canvasWidth * 1.0 / analyser.fftSize;
+            let x = 0;
+            for (let i = 0; i < analyser.fftSize; i++) {
+                const v = timeDomainDataArray[i] / 128.0; 
+                const y = v * canvasHeight / 2;
+                if (i === 0) {
+                    timeDomainCtx.moveTo(x, y);
+                } else {
+                    timeDomainCtx.lineTo(x, y);
+                }
+                x += sliceWidth;
+            }
+            timeDomainCtx.lineTo(canvasWidth, canvasHeight / 2); 
+            timeDomainCtx.stroke();
+        }
+
+        function drawFrequencyDomain() {
+            if (!freqDomainCtx || !audioContext || !frequencyDataArray) return;
+            const dpr = window.devicePixelRatio || 1;
+            const canvasWidth = freqDomainCanvas.width / dpr;
+            const canvasHeight = freqDomainCanvas.height / dpr;
+            freqDomainCtx.fillStyle = 'rgb(243, 244, 246)'; 
+            freqDomainCtx.fillRect(0, 0, canvasWidth, canvasHeight);
+            const numBins = analyser.frequencyBinCount;
+            const binFreqResolution = audioContext.sampleRate / FFT_SIZE;
+            const maxFreqOnChart = Math.min(20000, audioContext.sampleRate / 2, Math.max(maxFreqColorMap + 1000, 5000));
+            const binsToPlotOnChart = Math.floor(maxFreqOnChart / binFreqResolution);
+            const barWidth = (canvasWidth / binsToPlotOnChart) * 0.9; 
+            let barHeight;
+            let currentX = 0;
+            for (let i = 0; i < binsToPlotOnChart; i++) {
+                barHeight = (frequencyDataArray[i] / 255.0) * canvasHeight; 
+                const hue = (i / binsToPlotOnChart) * 300; 
+                freqDomainCtx.fillStyle = `hsl(${hue}, 75%, 55%)`;
+                freqDomainCtx.fillRect(currentX, canvasHeight - barHeight, barWidth, barHeight);
+                currentX += canvasWidth / binsToPlotOnChart; 
+            }
+            if (powerThreshold > 0) {
+                const yPowerThreshold = canvasHeight - (powerThreshold / 255.0) * canvasHeight;
+                freqDomainCtx.beginPath();
+                freqDomainCtx.moveTo(0, yPowerThreshold);
+                freqDomainCtx.lineTo(canvasWidth, yPowerThreshold);
+                freqDomainCtx.strokeStyle = 'rgba(255, 0, 0, 0.7)'; 
+                freqDomainCtx.lineWidth = 1;
+                freqDomainCtx.setLineDash([4, 2]); 
+                freqDomainCtx.stroke();
+                freqDomainCtx.setLineDash([]); 
+            }
+            if (minFreqColorMap > 0 && minFreqColorMap <= maxFreqOnChart) {
+                const xMinFreq = (minFreqColorMap / maxFreqOnChart) * canvasWidth;
+                freqDomainCtx.beginPath();
+                freqDomainCtx.moveTo(xMinFreq, 0);
+                freqDomainCtx.lineTo(xMinFreq, canvasHeight);
+                freqDomainCtx.strokeStyle = 'rgba(0, 255, 0, 0.7)'; 
+                freqDomainCtx.lineWidth = 1.5;
+                freqDomainCtx.stroke();
+            }
+            if (maxFreqColorMap > 0 && maxFreqColorMap <= maxFreqOnChart) {
+                const xMaxFreq = (maxFreqColorMap / maxFreqOnChart) * canvasWidth;
+                freqDomainCtx.beginPath();
+                freqDomainCtx.moveTo(xMaxFreq, 0);
+                freqDomainCtx.lineTo(xMaxFreq, canvasHeight);
+                freqDomainCtx.strokeStyle = 'rgba(0, 0, 255, 0.7)'; 
+                freqDomainCtx.lineWidth = 1.5;
+                freqDomainCtx.stroke();
+            }
+        }
+
+        function updateFavicon(r, g, b) {
+            if (!faviconLink) return; 
+            const canvas = document.createElement('canvas');
+            const size = 32; 
+            canvas.width = size;
+            canvas.height = size;
+            const ctx = canvas.getContext('2d');
+            ctx.beginPath();
+            ctx.arc(size / 2, size / 2, size / 2, 0, 2 * Math.PI, false);
+            ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
+            ctx.fill();
+            faviconLink.href = canvas.toDataURL('image/png');
+        }
+
+        function updateColorBox() {
+            if (!frequencyDataArray || !audioContext) {
+                const defaultR = 31, defaultG = 41, defaultB = 55;
+                colorBox.style.backgroundColor = `rgb(${defaultR}, ${defaultG}, ${defaultB})`; 
+                updateFavicon(defaultR, defaultG, defaultB); 
+                return;
+            }
+            let totalMagR = 0, countR = 0;
+            let totalMagG = 0, countG = 0;
+            let totalMagB = 0, countB = 0;
+            if (minFreqColorMap >= maxFreqColorMap) { 
+                const defaultR = 31, defaultG = 41, defaultB = 55;
+                colorBox.style.backgroundColor = `rgb(${defaultR}, ${defaultG}, ${defaultB})`;
+                updateFavicon(defaultR, defaultG, defaultB); 
+                return;
+            }
+            const colorBandWidth = (maxFreqColorMap - minFreqColorMap) / 3.0; 
+            const rBandEnd = minFreqColorMap + colorBandWidth;
+            const gBandEnd = minFreqColorMap + 2 * colorBandWidth;
+            const binFreqResolution = audioContext.sampleRate / FFT_SIZE;
+            for (let i = 0; i < analyser.frequencyBinCount; i++) {
+                const freq = i * binFreqResolution; 
+                const mag = frequencyDataArray[i];  
+                if (mag > powerThreshold && freq >= minFreqColorMap && freq <= maxFreqColorMap) {
+                    if (freq < rBandEnd) { 
+                        totalMagR += mag;
+                        countR++;
+                    } else if (freq < gBandEnd) { 
+                        totalMagG += mag;
+                        countG++;
+                    } else { 
+                        totalMagB += mag;
+                        countB++;
+                    }
+                }
+            }
+            const r = (countR > 0) ? Math.floor(totalMagR / countR) : 0;
+            const g = (countG > 0) ? Math.floor(totalMagG / countG) : 0;
+            const b = (countB > 0) ? Math.floor(totalMagB / countB) : 0;
+            const maxComponent = Math.max(1, r, g, b); 
+            const intensityFactor = 255.0 / maxComponent * 0.7 + 0.3; 
+            const finalR = Math.min(255, Math.floor(r * intensityFactor));
+            const finalG = Math.min(255, Math.floor(g * intensityFactor));
+            const finalB = Math.min(255, Math.floor(b * intensityFactor));
+            colorBox.style.backgroundColor = `rgb(${finalR}, ${finalG}, ${finalB})`;
+            updateFavicon(finalR, finalG, finalB); 
+        }
+
+        updateSliderValueDisplays();
+
+    </script>
+</body>
+</html>
