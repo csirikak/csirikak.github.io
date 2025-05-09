@@ -7,11 +7,12 @@
     <link id="favicon" rel="icon" type="image/x-icon" href="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"> <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body {
-            font-family: 'Inter', sans-serif; /* Tailwind uses a nice sans-serif stack by default */
+            font-family: 'Inter', sans-serif;
+            overscroll-behavior-y: contain; /* Prevents pull-to-refresh on mobile when scrolling body */
         }
-        /* Custom scrollbar for webkit browsers for a cleaner look */
         ::-webkit-scrollbar {
             width: 8px;
+            height: 8px;
         }
         ::-webkit-scrollbar-track {
             background: #f1f1f1;
@@ -24,32 +25,61 @@
         ::-webkit-scrollbar-thumb:hover {
             background: #555;
         }
-        /* Ensure canvas is sharp on high DPI displays */
         canvas {
             image-rendering: -moz-crisp-edges;
             image-rendering: -webkit-crisp-edges;
             image-rendering: pixelated;
             image-rendering: crisp-edges;
+            display: block; 
+        }
+
+        /* Tooltip styles */
+        .tooltip-container { 
+            position: relative; 
+        }
+
+        .tooltip {
+            visibility: hidden;
+            opacity: 0;
+            transition: opacity 0.2s ease-in-out, visibility 0.2s ease-in-out;
+            position: absolute;
+            /* JS will set top/bottom */
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 50; 
+            pointer-events: none; 
+        }
+
+        @media (hover: hover) and (pointer: fine) {
+            .tooltip-container:hover .tooltip {
+                /* visibility: visible; opacity: 1; pointer-events: auto; -- Handled by JS for positioning */
+            }
+        }
+
+        .tooltip.tooltip-active {
+            visibility: visible;
+            opacity: 1;
+            pointer-events: auto; 
         }
     </style>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
 </head>
 <body class="bg-gray-50 text-gray-800">
-    <div class="container mx-auto p-4 md:p-8 min-h-screen flex flex-col">
-        <header class="mb-8">
-            <h1 class="text-3xl sm:text-4xl font-bold text-center text-transparent bg-clip-text bg-gradient-to-r from-purple-600 via-pink-600 to-blue-600">
+    <div class="container mx-auto p-4 md:p-6 lg:p-8 min-h-screen flex flex-col">
+        <header class="mb-6 md:mb-8">
+            <h1 class="text-2xl sm:text-3xl md:text-4xl font-bold text-center text-transparent bg-clip-text bg-gradient-to-r from-purple-600 via-pink-600 to-blue-600">
                 The color of sound
             </h1>
             <p id="statusMessage" class="text-center text-sm text-gray-500 mt-2">Select an audio source to begin.</p>
         </header>
 
-        <main class="flex-grow">
-            <section class="mb-6 p-4 sm:p-6 bg-white rounded-xl shadow-lg">
-                <div class="grid md:grid-cols-2 gap-6 items-start">
+        <main class="flex-grow space-y-6">
+            <section class="p-4 sm:p-6 bg-white rounded-xl shadow-lg">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
                     <div>
-                        <h2 class="text-xl font-semibold mb-3 text-gray-700">Input Source</h2>
+                        <h2 class="text-lg sm:text-xl font-semibold mb-3 text-gray-700">Input Source</h2>
                         <div class="space-y-3">
-                            <button id="micButton" class="w-full bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white font-semibold py-2.5 px-4 rounded-lg shadow-md transition-all duration-150 ease-in-out transform hover:scale-105">
+                            <button id="micButton" class="w-full bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white font-semibold py-2.5 px-4 rounded-lg shadow-md transition-all duration-150 ease-in-out transform hover:scale-105 active:scale-95">
                                 Use Microphone
                             </button>
                             <div>
@@ -66,29 +96,71 @@
                         </div>
                     </div>
                     <div>
-                        <h2 class="text-xl font-semibold mb-3 text-gray-700">Output Color</h2>
-                        <div id="colorBox" class="w-full h-32 sm:h-40 rounded-lg shadow-inner border-2 border-gray-200 transition-colors duration-300 ease-in-out" style="background-color: #1f2937;"></div>
-                        <p class="text-xs text-gray-500 mt-1 text-center">Color derived from audio frequencies</p>
+                        <h2 class="text-lg sm:text-xl font-semibold mb-3 text-gray-700">Output Color</h2>
+                        <canvas id="colorCanvas" class="w-full h-32 sm:h-40 rounded-lg shadow-inner border-2 border-gray-200"></canvas>
+                        <div class="tooltip-container text-center">
+                            <p id="tooltipTrigger" class="text-xs text-gray-500 mt-1 cursor-help underline decoration-dotted decoration-gray-400 hover:decoration-indigo-500">
+                                How is color derived from audio?
+                            </p>
+                            <div id="infoTooltip" class="tooltip w-72 sm:w-80 md:w-96 max-h-[50vh] overflow-y-auto p-3 bg-gray-800 text-white text-xs rounded-lg shadow-xl">
+                                <h4 class="font-semibold text-sm mb-1 text-indigo-300">How Color is Determined:</h4>
+                                <ol class="list-decimal list-inside space-y-1 text-left">
+                                    <li><strong>Audio Input:</strong> Sound is captured from your microphone or an uploaded audio file.</li>
+                                    <li><strong>FFT Analysis:</strong> A Fast Fourier Transform (FFT) converts the audio into its constituent frequencies, showing how much energy (power) is present at each frequency.</li>
+                                    <li><strong>Frequency Range Selection:</strong> The "Min Frequency" and "Max Frequency" sliders define the specific range of frequencies that will be used for color mapping.</li>
+                                    <li><strong>Power Threshold:</strong> The "Power Threshold" slider filters out very quiet frequencies. Only frequencies with power above this threshold contribute to the color.</li>
+                                    <li><strong>RGB Mapping:</strong>
+                                        <ul class="list-disc list-inside ml-4">
+                                            <li>The selected frequency range (between Min and Max Freq) is divided into three equal sub-bands.</li>
+                                            <li>The average power of frequencies in the <strong>lowest</strong> third of this range determines the intensity of the <strong>Red (R)</strong> color component.</li>
+                                            <li>The average power in the <strong>middle</strong> third determines the <strong>Green (G)</strong> component.</li>
+                                            <li>The average power in the <strong>highest</strong> third determines the <strong>Blue (B)</strong> component.</li>
+                                        </ul>
+                                    </li>
+                                    <li><strong>Intensity Boost:</strong> The resulting RGB values are then slightly boosted in intensity to ensure the color is vibrant and visible, even if the raw audio power in the bands is low.</li>
+                                    <li><strong>Display:</strong> The final RGB color is displayed in this box (either as a static color or as the newest band in the waterfall view) and as the page's favicon.</li>
+                                </ol>
+                                <button id="closeTooltipButton" class="mt-2 text-indigo-300 hover:text-indigo-100 text-xs md:hidden">(Tap to close)</button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </section>
 
-            <section class="mb-6 p-4 sm:p-6 bg-white rounded-xl shadow-lg">
-                <h2 class="text-xl font-semibold mb-4 text-gray-700">Analysis & Color Controls</h2>
-                <div class="grid sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-4">
-                    <div>
+            <section class="p-4 sm:p-6 bg-white rounded-xl shadow-lg">
+                <h2 class="text-lg sm:text-xl font-semibold mb-4 text-gray-700">Display Mode</h2>
+                <div class="flex flex-col sm:flex-row sm:items-center sm:space-x-6 space-y-3 sm:space-y-0 mb-4">
+                    <div class="flex items-center">
+                        <input id="modeStatic" type="radio" name="displayMode" value="static" class="h-4 w-4 text-indigo-600 border-gray-300 focus:ring-indigo-500" checked>
+                        <label for="modeStatic" class="ml-2 block text-sm font-medium text-gray-700">Static Color</label>
+                    </div>
+                    <div class="flex items-center">
+                        <input id="modeWaterfall" type="radio" name="displayMode" value="waterfall" class="h-4 w-4 text-indigo-600 border-gray-300 focus:ring-indigo-500">
+                        <label for="modeWaterfall" class="ml-2 block text-sm font-medium text-gray-700">Waterfall View</label>
+                    </div>
+                </div>
+                <div id="waterfallControlsContainer" class="hidden mt-4 space-y-1">
+                    <label for="waterfallSpeed" class="block text-sm font-medium text-gray-600">Waterfall Speed: <span id="waterfallSpeedValue" class="font-bold text-indigo-600">2.0</span></label>
+                    <input type="range" id="waterfallSpeed" min="0.1" max="10" value="2" step="0.1" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600">
+                </div>
+            </section>
+
+            <section class="p-4 sm:p-6 bg-white rounded-xl shadow-lg">
+                <h2 class="text-lg sm:text-xl font-semibold mb-4 text-gray-700">Analysis & Color Controls</h2>
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-4">
+                    <div class="space-y-1">
                         <label for="powerThreshold" class="block text-sm font-medium text-gray-600">Power Threshold: <span id="powerThresholdValue" class="font-bold text-indigo-600">50</span></label>
                         <input type="range" id="powerThreshold" min="0" max="255" value="50" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600">
                     </div>
-                    <div>
+                    <div class="space-y-1">
                         <label for="minFreq" class="block text-sm font-medium text-gray-600">Min Frequency (Hz): <span id="minFreqValue" class="font-bold text-indigo-600">20</span></label>
                         <input type="range" id="minFreq" min="20" max="20000" value="20" step="10" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600">
                     </div>
-                    <div>
+                    <div class="space-y-1">
                         <label for="maxFreq" class="block text-sm font-medium text-gray-600">Max Frequency (Hz): <span id="maxFreqValue" class="font-bold text-indigo-600">5000</span></label>
-                        <input type="range" id="maxFreq" min="100" max="20000" value="5000" step="10" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600">
+                        <input type="range" id="maxFreq" min="100" max="20000" value="2500" step="10" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600">
                     </div>
-                    <div>
+                    <div class="space-y-1">
                         <label for="smoothingFactor" class="block text-sm font-medium text-gray-600">Smoothing Factor: <span id="smoothingFactorValue" class="font-bold text-indigo-600">0.8</span></label>
                         <input type="range" id="smoothingFactor" min="0" max="0.99" value="0.8" step="0.01" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600">
                     </div>
@@ -96,14 +168,14 @@
             </section>
 
             <section class="p-4 sm:p-6 bg-white rounded-xl shadow-lg">
-                <div class="grid md:grid-cols-2 gap-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                        <h2 class="text-xl font-semibold mb-3 text-gray-700">Waveform (Time Domain)</h2>
-                        <canvas id="timeDomainCanvas" class="w-full h-64 bg-gray-100 rounded-lg shadow-inner border border-gray-200"></canvas>
+                        <h2 class="text-lg sm:text-xl font-semibold mb-3 text-gray-700">Waveform (Time Domain)</h2>
+                        <canvas id="timeDomainCanvas" class="w-full h-48 sm:h-64 bg-gray-100 rounded-lg shadow-inner border border-gray-200"></canvas>
                     </div>
                     <div>
-                        <h2 class="text-xl font-semibold mb-3 text-gray-700">Spectrum (Frequency Domain)</h2>
-                        <canvas id="freqDomainCanvas" class="w-full h-64 bg-gray-100 rounded-lg shadow-inner border border-gray-200"></canvas>
+                        <h2 class="text-lg sm:text-xl font-semibold mb-3 text-gray-700">Spectrum (Frequency Domain)</h2>
+                        <canvas id="freqDomainCanvas" class="w-full h-48 sm:h-64 bg-gray-100 rounded-lg shadow-inner border border-gray-200"></canvas>
                     </div>
                 </div>
             </section>
@@ -119,73 +191,279 @@
         let rafId = null;
         let isMicActive = false;
 
-        const FFT_SIZE = 2048; // Standard FFT size
-        let frequencyDataArray; // Stores frequency data
-        let timeDomainDataArray; // Stores waveform data
+        const FFT_SIZE = 2048; 
+        let frequencyDataArray; 
+        let timeDomainDataArray; 
 
         // --- DOM Elements ---
         const micButton = document.getElementById('micButton');
         const fileInput = document.getElementById('fileInput');
         const audioPlayer = document.getElementById('audioPlayer');
-        const colorBox = document.getElementById('colorBox');
         const statusMessage = document.getElementById('statusMessage');
         const faviconLink = document.getElementById('favicon'); 
+
+        const colorCanvasElement = document.getElementById('colorCanvas'); 
+        let colorCtx; 
+        let offscreenColorCanvas = null; // For waterfall
+        let offscreenColorCtx = null;   // For waterfall
+
+        const modeStaticRadio = document.getElementById('modeStatic');
+        const modeWaterfallRadio = document.getElementById('modeWaterfall');
+        const waterfallControlsContainer = document.getElementById('waterfallControlsContainer');
+        const waterfallSpeedSlider = document.getElementById('waterfallSpeed');
+        const waterfallSpeedValueSpan = document.getElementById('waterfallSpeedValue');
+        
+        const tooltipTrigger = document.getElementById('tooltipTrigger');
+        const infoTooltip = document.getElementById('infoTooltip');
+        const closeTooltipButton = document.getElementById('closeTooltipButton');
 
         const powerThresholdSlider = document.getElementById('powerThreshold');
         const minFreqSlider = document.getElementById('minFreq');
         const maxFreqSlider = document.getElementById('maxFreq');
-        const smoothingFactorSlider = document.getElementById('smoothingFactor'); // New slider element
+        const smoothingFactorSlider = document.getElementById('smoothingFactor'); 
         const powerThresholdValueSpan = document.getElementById('powerThresholdValue');
         const minFreqValueSpan = document.getElementById('minFreqValue');
         const maxFreqValueSpan = document.getElementById('maxFreqValue');
-        const smoothingFactorValueSpan = document.getElementById('smoothingFactorValue'); // New span for value
+        const smoothingFactorValueSpan = document.getElementById('smoothingFactorValue'); 
 
         const timeDomainCanvas = document.getElementById('timeDomainCanvas');
         const freqDomainCanvas = document.getElementById('freqDomainCanvas');
         let timeDomainCtx, freqDomainCtx; 
 
-        // --- Default Slider Values ---
+        // --- State Variables ---
         let powerThreshold = parseInt(powerThresholdSlider.value);
         let minFreqColorMap = parseInt(minFreqSlider.value);
         let maxFreqColorMap = parseInt(maxFreqSlider.value);
-        let smoothingFactor = parseFloat(smoothingFactorSlider.value); // Default smoothing factor
+        let smoothingFactor = parseFloat(smoothingFactorSlider.value); 
+        let currentDisplayMode = 'static'; 
+        let waterfallSpeed = parseFloat(waterfallSpeedSlider.value); 
+        let lastCalculatedRgbColor = 'rgb(0,0,0)'; 
 
         // --- Initialization ---
         window.addEventListener('load', () => {
-            setupCanvas(timeDomainCanvas);
-            setupCanvas(freqDomainCanvas);
-            timeDomainCtx = timeDomainCanvas.getContext('2d');
-            freqDomainCtx = freqDomainCanvas.getContext('2d');
-            clearVisualizations(); 
-            updateFavicon(31, 41, 55); 
-            updateSliderValueDisplays(); // Initialize all slider display values
+            requestAnimationFrame(() => {
+                setupCanvas(timeDomainCanvas);
+                setupCanvas(freqDomainCanvas);
+                setupCanvas(colorCanvasElement); 
+
+                if (timeDomainCanvas) { timeDomainCtx = timeDomainCanvas.getContext('2d'); if(timeDomainCtx) timeDomainCtx.imageSmoothingEnabled = false; }
+                if (freqDomainCanvas) { freqDomainCtx = freqDomainCanvas.getContext('2d'); if(freqDomainCtx) freqDomainCtx.imageSmoothingEnabled = false; }
+                if (colorCanvasElement) { colorCtx = colorCanvasElement.getContext('2d'); if(colorCtx) colorCtx.imageSmoothingEnabled = false; }
+                
+                // Initialize offscreen canvas for waterfall
+                if (colorCanvasElement && colorCanvasElement.width > 0 && colorCanvasElement.height > 0) {
+                    offscreenColorCanvas = document.createElement('canvas');
+                    offscreenColorCanvas.width = colorCanvasElement.width; // Physical pixels
+                    offscreenColorCanvas.height = colorCanvasElement.height; // Physical pixels
+                    offscreenColorCtx = offscreenColorCanvas.getContext('2d');
+                    if (offscreenColorCtx) {
+                        offscreenColorCtx.imageSmoothingEnabled = false;
+                        // Fill initially with black
+                        offscreenColorCtx.fillStyle = 'rgb(0,0,0)';
+                        offscreenColorCtx.fillRect(0, 0, offscreenColorCanvas.width, offscreenColorCanvas.height);
+                    }
+                }
+                
+                clearVisualizations(); 
+                updateFavicon(0,0,0); 
+                updateSliderValueDisplays(); 
+                setInitialColorDisplay(); 
+                setupTooltipToggle();
+            });
         });
+
+        function setInitialColorDisplay() {
+            if (colorCtx && colorCanvasElement && colorCanvasElement.width > 0 && colorCanvasElement.height > 0) {
+                const dpr = window.devicePixelRatio || 1;
+                colorCtx.fillStyle = 'rgb(0,0,0)';
+                colorCtx.fillRect(0, 0, colorCanvasElement.width / dpr, colorCanvasElement.height / dpr);
+                 // Also initialize the offscreen canvas if in waterfall mode
+                if (offscreenColorCtx) {
+                    offscreenColorCtx.fillStyle = 'rgb(0,0,0)';
+                    offscreenColorCtx.fillRect(0,0, offscreenColorCanvas.width, offscreenColorCanvas.height);
+                }
+            }
+        }
         
         function setupCanvas(canvasElement) {
+            if (!canvasElement) return; 
             const dpr = window.devicePixelRatio || 1; 
-            const rect = canvasElement.getBoundingClientRect(); 
-            canvasElement.width = rect.width * dpr;
-            canvasElement.height = rect.height * dpr;
+            
+            const computedStyle = getComputedStyle(canvasElement);
+            let cssWidth = parseFloat(computedStyle.width);
+            let cssHeight = parseFloat(computedStyle.height);
+
+            if (cssWidth <= 0) { 
+                if (canvasElement.parentElement && canvasElement.parentElement.clientWidth > 0) {
+                    cssWidth = canvasElement.parentElement.clientWidth;
+                } else {
+                    cssWidth = 300; 
+                }
+            }
+            if (cssHeight <= 0) { 
+                if (canvasElement.classList.contains('h-32')) cssHeight = 128; 
+                else if (canvasElement.classList.contains('h-40')) cssHeight = 160; 
+                else if (canvasElement.classList.contains('h-48')) cssHeight = 192; 
+                else if (canvasElement.classList.contains('h-64')) cssHeight = 256; 
+                else cssHeight = 150; 
+            }
+
+            canvasElement.width = cssWidth * dpr;
+            canvasElement.height = cssHeight * dpr;
+            
+            canvasElement.style.width = `${cssWidth}px`;
+            canvasElement.style.height = `${cssHeight}px`;
+            
             const ctx = canvasElement.getContext('2d');
-            ctx.scale(dpr, dpr); 
-            canvasElement.style.width = `${rect.width}px`;
-            canvasElement.style.height = `${rect.height}px`;
+            if (ctx) { 
+                 ctx.scale(dpr, dpr); 
+                 ctx.imageSmoothingEnabled = false; // Ensure crisp rendering
+            }
         }
 
         let resizeTimeout;
         window.addEventListener('resize', () => {
             clearTimeout(resizeTimeout);
             resizeTimeout = setTimeout(() => {
+                const oldOffscreenData = offscreenColorCtx ? offscreenColorCtx.getImageData(0, 0, offscreenColorCanvas.width, offscreenColorCanvas.height) : null;
+
                 setupCanvas(timeDomainCanvas);
                 setupCanvas(freqDomainCanvas);
+                setupCanvas(colorCanvasElement); 
+                
+                if (timeDomainCanvas) { timeDomainCtx = timeDomainCanvas.getContext('2d'); if(timeDomainCtx) timeDomainCtx.imageSmoothingEnabled = false; }
+                if (freqDomainCanvas) { freqDomainCtx = freqDomainCanvas.getContext('2d'); if(freqDomainCtx) freqDomainCtx.imageSmoothingEnabled = false; }
+                if (colorCanvasElement) { colorCtx = colorCanvasElement.getContext('2d'); if(colorCtx) colorCtx.imageSmoothingEnabled = false; }
+
+                // Re-initialize or resize offscreen canvas
+                if (colorCanvasElement && colorCanvasElement.width > 0 && colorCanvasElement.height > 0) {
+                    if (!offscreenColorCanvas || offscreenColorCanvas.width !== colorCanvasElement.width || offscreenColorCanvas.height !== colorCanvasElement.height) {
+                        offscreenColorCanvas = document.createElement('canvas');
+                        offscreenColorCanvas.width = colorCanvasElement.width;
+                        offscreenColorCanvas.height = colorCanvasElement.height;
+                        offscreenColorCtx = offscreenColorCanvas.getContext('2d');
+                        if (offscreenColorCtx) {
+                             offscreenColorCtx.imageSmoothingEnabled = false;
+                             if (oldOffscreenData) { // Try to restore old data if possible (might be stretched/clipped)
+                                offscreenColorCtx.putImageData(oldOffscreenData, 0, 0);
+                             } else {
+                                offscreenColorCtx.fillStyle = 'rgb(0,0,0)';
+                                offscreenColorCtx.fillRect(0, 0, offscreenColorCanvas.width, offscreenColorCanvas.height);
+                             }
+                        }
+                    }
+                }
+
+
+                if (currentDisplayMode === 'static' && colorCtx) {
+                     const dpr = window.devicePixelRatio || 1;
+                     if (colorCanvasElement && colorCanvasElement.width > 0 && colorCanvasElement.height > 0) { 
+                        colorCtx.fillStyle = lastCalculatedRgbColor;
+                        colorCtx.fillRect(0, 0, colorCanvasElement.width / dpr, colorCanvasElement.height / dpr);
+                     }
+                } else if (currentDisplayMode === 'waterfall' && colorCtx && offscreenColorCanvas) {
+                    // Redraw waterfall from its current state
+                     const dpr = window.devicePixelRatio || 1;
+                     colorCtx.clearRect(0, 0, colorCanvasElement.width / dpr, colorCanvasElement.height / dpr);
+                     colorCtx.drawImage(offscreenColorCanvas, 0, 0, colorCanvasElement.width / dpr, colorCanvasElement.height / dpr);
+                }
+
+
                 if (rafId) { 
-                    drawTimeDomain(); 
-                    drawFrequencyDomain();
-                } else {
-                    clearVisualizations();
+                    if (timeDomainDataArray && frequencyDataArray) { 
+                        drawTimeDomain(); 
+                        drawFrequencyDomain();
+                    }
+                } else { 
+                    clearVisualizations(); 
                 }
             }, 250); 
         });
+        
+        function setupTooltipToggle() {
+            if (tooltipTrigger && infoTooltip) {
+                const showTooltip = () => {
+                    // Temporarily make it visible to calculate dimensions correctly if needed
+                    infoTooltip.style.visibility = 'hidden'; // Keep it from flashing
+                    infoTooltip.classList.add('tooltip-active'); // Add active to apply styles for measurement
+                    
+                    const tooltipRect = infoTooltip.getBoundingClientRect();
+                    const triggerRect = tooltipTrigger.getBoundingClientRect();
+                    const containerRect = tooltipTrigger.closest('.tooltip-container').getBoundingClientRect();
+
+                    let newTop = triggerRect.top - containerRect.top - tooltipRect.height - 8; // 8px margin (0.5rem)
+                    let newBottom = 'auto';
+
+                    if ((triggerRect.top - tooltipRect.height - 8) < 0) { // Check if it overflows viewport top
+                        newTop = triggerRect.bottom - containerRect.top + 8; // Position below trigger
+                        newBottom = 'auto';
+                        infoTooltip.style.top = `${newTop}px`;
+                        infoTooltip.style.bottom = newBottom;
+                    } else {
+                        infoTooltip.style.bottom = 'calc(100% + 0.5rem)';
+                        infoTooltip.style.top = 'auto';
+                    }
+                    
+                    // Horizontal centering/adjustment
+                    let newLeft = '50%';
+                    let newTransform = 'translateX(-50%)';
+                    
+                    // Recalculate after potential vertical flip for accurate horizontal check
+                    const finalTooltipRect = infoTooltip.getBoundingClientRect(); 
+
+                    if (finalTooltipRect.left < 0) {
+                        newLeft = '0px'; // Align to left edge of container
+                        newTransform = 'translateX(0)';
+                    } else if (finalTooltipRect.right > window.innerWidth) {
+                        newLeft = 'auto';
+                        infoTooltip.style.right = '0px'; // Align to right edge of container
+                        newTransform = 'translateX(0)';
+                    }
+                    
+                    infoTooltip.style.left = newLeft;
+                    if (newLeft !== 'auto') infoTooltip.style.right = 'auto'; // Avoid conflicting right style
+                    infoTooltip.style.transform = newTransform;
+                    infoTooltip.style.visibility = 'visible'; // Make it truly visible
+                };
+
+                const hideTooltip = () => {
+                    infoTooltip.classList.remove('tooltip-active');
+                     // Reset styles to default for next show
+                    infoTooltip.style.top = 'auto';
+                    infoTooltip.style.bottom = 'calc(100% + 0.5rem)';
+                    infoTooltip.style.left = '50%';
+                    infoTooltip.style.right = 'auto';
+                    infoTooltip.style.transform = 'translateX(-50%)';
+                };
+
+                tooltipTrigger.addEventListener('click', (event) => {
+                    event.stopPropagation(); 
+                    if (infoTooltip.classList.contains('tooltip-active')) {
+                        hideTooltip();
+                    } else {
+                        showTooltip();
+                    }
+                });
+
+                if (closeTooltipButton) {
+                    closeTooltipButton.addEventListener('click', (event) => {
+                         event.stopPropagation();
+                         hideTooltip();
+                    });
+                }
+                document.addEventListener('click', (event) => {
+                    if (infoTooltip.classList.contains('tooltip-active') && !infoTooltip.contains(event.target) && event.target !== tooltipTrigger) {
+                        hideTooltip();
+                    }
+                });
+
+                if (window.matchMedia('(hover: hover) and (pointer: fine)').matches) {
+                    tooltipTrigger.addEventListener('mouseenter', showTooltip);
+                    tooltipTrigger.addEventListener('mouseleave', hideTooltip);
+                }
+            }
+        }
+
 
         function initAudioContext() {
             if (!audioContext) { 
@@ -193,7 +471,7 @@
                     audioContext = new (window.AudioContext || window.webkitAudioContext)();
                     analyser = audioContext.createAnalyser();
                     analyser.fftSize = FFT_SIZE;
-                    analyser.smoothingTimeConstant = smoothingFactor; // Set initial smoothing factor
+                    analyser.smoothingTimeConstant = smoothingFactor; 
 
                     frequencyDataArray = new Uint8Array(analyser.frequencyBinCount);
                     timeDomainDataArray = new Uint8Array(analyser.fftSize);
@@ -217,12 +495,11 @@
                 }
             }
             if (audioContext.state === 'suspended') { 
-                audioContext.resume();
+                audioContext.resume().catch(err => console.error("Error resuming AudioContext:", err));
             }
             return true;
         }
 
-        // --- Event Listeners for Controls ---
         powerThresholdSlider.addEventListener('input', (e) => {
             powerThreshold = parseInt(e.target.value);
             updateSliderValueDisplays();
@@ -247,11 +524,40 @@
             minFreqSlider.max = newMaxFreq - 10; 
             updateSliderValueDisplays();
         });
-        smoothingFactorSlider.addEventListener('input', (e) => { // Event listener for new slider
+        smoothingFactorSlider.addEventListener('input', (e) => { 
             smoothingFactor = parseFloat(e.target.value);
-            if (analyser) { // Update analyser if it exists
+            if (analyser) { 
                 analyser.smoothingTimeConstant = smoothingFactor;
             }
+            updateSliderValueDisplays();
+        });
+
+        modeStaticRadio.addEventListener('change', () => {
+            if (modeStaticRadio.checked) {
+                currentDisplayMode = 'static';
+                waterfallControlsContainer.classList.add('hidden');
+                if (colorCtx && colorCanvasElement && colorCanvasElement.width > 0 && colorCanvasElement.height > 0) { 
+                    const dpr = window.devicePixelRatio || 1;
+                    colorCtx.fillStyle = lastCalculatedRgbColor;
+                    colorCtx.fillRect(0, 0, colorCanvasElement.width / dpr, colorCanvasElement.height / dpr);
+                }
+            }
+        });
+        modeWaterfallRadio.addEventListener('change', () => {
+            if (modeWaterfallRadio.checked) {
+                currentDisplayMode = 'waterfall';
+                waterfallControlsContainer.classList.remove('hidden');
+                 // Ensure offscreen canvas is ready and filled correctly when switching to waterfall
+                if (offscreenColorCtx && offscreenColorCanvas && colorCtx) {
+                    const dpr = window.devicePixelRatio || 1;
+                    offscreenColorCtx.fillStyle = lastCalculatedRgbColor; // Or 'rgb(0,0,0)' if you want it to clear
+                    offscreenColorCtx.fillRect(0,0, offscreenColorCanvas.width, offscreenColorCanvas.height);
+                    colorCtx.drawImage(offscreenColorCanvas, 0,0, colorCanvasElement.width/dpr, colorCanvasElement.height/dpr);
+                }
+            }
+        });
+        waterfallSpeedSlider.addEventListener('input', (e) => {
+            waterfallSpeed = parseFloat(e.target.value); 
             updateSliderValueDisplays();
         });
 
@@ -260,15 +566,15 @@
             powerThresholdValueSpan.textContent = powerThreshold;
             minFreqValueSpan.textContent = minFreqColorMap.toFixed(0);
             maxFreqValueSpan.textContent = maxFreqColorMap.toFixed(0);
-            smoothingFactorValueSpan.textContent = smoothingFactor.toFixed(2); // Display smoothing factor with 2 decimal places
+            smoothingFactorValueSpan.textContent = smoothingFactor.toFixed(2); 
+            waterfallSpeedValueSpan.textContent = waterfallSpeed.toFixed(1); 
         }
         
         micButton.addEventListener('click', handleMicButtonClick);
         fileInput.addEventListener('change', handleFileSelect);
-
         audioPlayer.addEventListener('play', () => {
             if (audioContext && audioContext.state === 'suspended') {
-                audioContext.resume();
+                audioContext.resume().catch(err => console.error("Error resuming AudioContext on play:", err));
             }
             if (sourceNode && sourceNode.mediaElement && !rafId) {
                  if (!analyser || !analyser.context) { 
@@ -286,7 +592,7 @@
         audioPlayer.addEventListener('pause', stopVisualization);
         audioPlayer.addEventListener('ended', stopVisualization);
 
-        function handleMicButtonClick() {
+        function handleMicButtonClick() { 
             if (!initAudioContext()) return; 
             if (isMicActive) {
                 stopMicrophone();
@@ -294,8 +600,7 @@
                 startMicrophone();
             }
         }
-
-        async function startMicrophone() {
+        async function startMicrophone() { 
             try {
                 audioPlayer.pause(); 
                 if (sourceNode && typeof sourceNode.disconnect === 'function') {
@@ -304,7 +609,7 @@
                 microphoneStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
                 sourceNode = audioContext.createMediaStreamSource(microphoneStream);
                 sourceNode.connect(analyser);
-                if (analyser) analyser.smoothingTimeConstant = smoothingFactor; // Ensure smoothing is applied
+                if (analyser) analyser.smoothingTimeConstant = smoothingFactor;
 
                 isMicActive = true;
                 micButton.textContent = 'Stop Microphone';
@@ -321,8 +626,7 @@
                 alert('Could not access microphone. Please ensure permission is granted and try again.');
             }
         }
-
-        function stopMicrophone() {
+        function stopMicrophone() { 
             if (microphoneStream) {
                 microphoneStream.getTracks().forEach(track => track.stop()); 
             }
@@ -340,8 +644,7 @@
             statusMessage.textContent = "Microphone stopped. Select an audio source.";
             stopVisualization();
         }
-
-        function handleFileSelect(event) {
+        function handleFileSelect(event) { 
             if (!initAudioContext()) return; 
             if (isMicActive) {
                 stopMicrophone(); 
@@ -357,7 +660,7 @@
                     sourceNode = audioContext.createMediaElementSource(audioPlayer);
                     sourceNode.connect(analyser);
                 }
-                if (analyser) analyser.smoothingTimeConstant = smoothingFactor; // Ensure smoothing is applied
+                if (analyser) analyser.smoothingTimeConstant = smoothingFactor; 
                 if (audioContext.destination) {
                    try { 
                         analyser.disconnect(audioContext.destination); 
@@ -382,28 +685,41 @@
             }
             if (!isMicActive && audioPlayer.paused) { 
                  statusMessage.textContent = "Visualization stopped. Select an audio source or play the current file.";
-                 clearVisualizations();
-                 updateFavicon(31, 41, 55); 
+                 lastCalculatedRgbColor = 'rgb(0,0,0)'; 
+                 clearVisualizations(); 
+                 updateFavicon(0,0,0); 
+                 if (infoTooltip) infoTooltip.classList.remove('tooltip-active'); 
             }
         }
 
-        function clearVisualizations() {
+        function clearVisualizations() { 
             const dpr = window.devicePixelRatio || 1;
-            if (timeDomainCtx) {
-                timeDomainCtx.clearRect(0, 0, timeDomainCanvas.width / dpr, timeDomainCanvas.height / dpr);
+            if (timeDomainCtx && timeDomainCanvas && timeDomainCanvas.width > 0 && timeDomainCanvas.height > 0) {
+                const canvasWidth = timeDomainCanvas.width / dpr;
+                const canvasHeight = timeDomainCanvas.height / dpr;
+                timeDomainCtx.clearRect(0, 0, canvasWidth, canvasHeight);
                 timeDomainCtx.fillStyle = 'rgb(150,150,150)'; 
                 timeDomainCtx.textAlign = 'center';
-                timeDomainCtx.font = "14px Inter";
-                timeDomainCtx.fillText("No audio data", timeDomainCanvas.width / dpr / 2, timeDomainCanvas.height / dpr / 2);
+                timeDomainCtx.font = "12px Inter"; 
+                timeDomainCtx.fillText("No audio data", canvasWidth / 2, canvasHeight / 2);
             }
-            if (freqDomainCtx) {
-                freqDomainCtx.clearRect(0, 0, freqDomainCanvas.width / dpr, freqDomainCanvas.height / dpr);
+            if (freqDomainCtx && freqDomainCanvas && freqDomainCanvas.width > 0 && freqDomainCanvas.height > 0) {
+                const canvasWidth = freqDomainCanvas.width / dpr;
+                const canvasHeight = freqDomainCanvas.height / dpr;
+                freqDomainCtx.clearRect(0, 0, canvasWidth, canvasHeight);
                 freqDomainCtx.fillStyle = 'rgb(150,150,150)';
                 freqDomainCtx.textAlign = 'center';
-                freqDomainCtx.font = "14px Inter";
-                freqDomainCtx.fillText("No audio data", freqDomainCanvas.width / dpr / 2, freqDomainCanvas.height / dpr / 2);
+                freqDomainCtx.font = "12px Inter"; 
+                freqDomainCtx.fillText("No audio data", canvasWidth / 2, canvasHeight / 2);
             }
-            colorBox.style.backgroundColor = '#1f2937'; 
+            if (colorCtx && colorCanvasElement && colorCanvasElement.width > 0 && colorCanvasElement.height > 0) { 
+                colorCtx.fillStyle = 'rgb(0,0,0)';
+                colorCtx.fillRect(0, 0, colorCanvasElement.width / dpr, colorCanvasElement.height / dpr);
+            }
+             if (offscreenColorCtx && offscreenColorCanvas) { // Also clear/reset offscreen canvas
+                offscreenColorCtx.fillStyle = 'rgb(0,0,0)';
+                offscreenColorCtx.fillRect(0,0, offscreenColorCanvas.width, offscreenColorCanvas.height);
+            }
         }
 
         function visualize() {
@@ -414,14 +730,16 @@
             }
             analyser.getByteTimeDomainData(timeDomainDataArray); 
             analyser.getByteFrequencyData(frequencyDataArray); 
+
             drawTimeDomain();       
             drawFrequencyDomain();  
-            updateColorBox();       
+            updateColorPresentation(); 
+            
             rafId = requestAnimationFrame(visualize); 
         }
 
-        function drawTimeDomain() {
-            if (!timeDomainCtx) return;
+        function drawTimeDomain() { 
+            if (!timeDomainCtx || !timeDomainDataArray || !timeDomainCanvas || timeDomainCanvas.width === 0 || timeDomainCanvas.height === 0) return;
             const dpr = window.devicePixelRatio || 1;
             const canvasWidth = timeDomainCanvas.width / dpr;
             const canvasHeight = timeDomainCanvas.height / dpr;
@@ -445,9 +763,8 @@
             timeDomainCtx.lineTo(canvasWidth, canvasHeight / 2); 
             timeDomainCtx.stroke();
         }
-
-        function drawFrequencyDomain() {
-            if (!freqDomainCtx || !audioContext || !frequencyDataArray) return;
+        function drawFrequencyDomain() { 
+            if (!freqDomainCtx || !audioContext || !frequencyDataArray || !freqDomainCanvas || freqDomainCanvas.width === 0 || freqDomainCanvas.height === 0) return;
             const dpr = window.devicePixelRatio || 1;
             const canvasWidth = freqDomainCanvas.width / dpr;
             const canvasHeight = freqDomainCanvas.height / dpr;
@@ -457,97 +774,106 @@
             const binFreqResolution = audioContext.sampleRate / FFT_SIZE;
             const maxFreqOnChart = Math.min(20000, audioContext.sampleRate / 2, Math.max(maxFreqColorMap + 1000, 5000));
             const binsToPlotOnChart = Math.floor(maxFreqOnChart / binFreqResolution);
-            const barWidth = (canvasWidth / binsToPlotOnChart) * 0.9; 
+            
+            if (binsToPlotOnChart <= 0) return; 
+
+            const barTotalWidth = canvasWidth / binsToPlotOnChart;
+            const barWidth = barTotalWidth * 0.9; 
             let barHeight;
             let currentX = 0;
             for (let i = 0; i < binsToPlotOnChart; i++) {
                 barHeight = (frequencyDataArray[i] / 255.0) * canvasHeight; 
                 const hue = (i / binsToPlotOnChart) * 300; 
                 freqDomainCtx.fillStyle = `hsl(${hue}, 75%, 55%)`;
-                freqDomainCtx.fillRect(currentX, canvasHeight - barHeight, barWidth, barHeight);
-                currentX += canvasWidth / binsToPlotOnChart; 
+                freqDomainCtx.fillRect(currentX + (barTotalWidth - barWidth)/2 , canvasHeight - barHeight, barWidth, barHeight);
+                currentX += barTotalWidth; 
             }
-            if (powerThreshold > 0) {
+             if (powerThreshold > 0) {
                 const yPowerThreshold = canvasHeight - (powerThreshold / 255.0) * canvasHeight;
-                freqDomainCtx.beginPath();
-                freqDomainCtx.moveTo(0, yPowerThreshold);
-                freqDomainCtx.lineTo(canvasWidth, yPowerThreshold);
-                freqDomainCtx.strokeStyle = 'rgba(255, 0, 0, 0.7)'; 
-                freqDomainCtx.lineWidth = 1;
-                freqDomainCtx.setLineDash([4, 2]); 
-                freqDomainCtx.stroke();
-                freqDomainCtx.setLineDash([]); 
+                freqDomainCtx.beginPath(); freqDomainCtx.moveTo(0, yPowerThreshold); freqDomainCtx.lineTo(canvasWidth, yPowerThreshold);
+                freqDomainCtx.strokeStyle = 'rgba(255, 0, 0, 0.7)'; freqDomainCtx.lineWidth = 1; freqDomainCtx.setLineDash([4, 2]); freqDomainCtx.stroke(); freqDomainCtx.setLineDash([]); 
             }
             if (minFreqColorMap > 0 && minFreqColorMap <= maxFreqOnChart) {
                 const xMinFreq = (minFreqColorMap / maxFreqOnChart) * canvasWidth;
-                freqDomainCtx.beginPath();
-                freqDomainCtx.moveTo(xMinFreq, 0);
-                freqDomainCtx.lineTo(xMinFreq, canvasHeight);
-                freqDomainCtx.strokeStyle = 'rgba(0, 255, 0, 0.7)'; 
-                freqDomainCtx.lineWidth = 1.5;
-                freqDomainCtx.stroke();
+                freqDomainCtx.beginPath(); freqDomainCtx.moveTo(xMinFreq, 0); freqDomainCtx.lineTo(xMinFreq, canvasHeight);
+                freqDomainCtx.strokeStyle = 'rgba(0, 255, 0, 0.7)'; freqDomainCtx.lineWidth = 1.5; freqDomainCtx.stroke();
             }
             if (maxFreqColorMap > 0 && maxFreqColorMap <= maxFreqOnChart) {
                 const xMaxFreq = (maxFreqColorMap / maxFreqOnChart) * canvasWidth;
-                freqDomainCtx.beginPath();
-                freqDomainCtx.moveTo(xMaxFreq, 0);
-                freqDomainCtx.lineTo(xMaxFreq, canvasHeight);
-                freqDomainCtx.strokeStyle = 'rgba(0, 0, 255, 0.7)'; 
-                freqDomainCtx.lineWidth = 1.5;
-                freqDomainCtx.stroke();
+                freqDomainCtx.beginPath(); freqDomainCtx.moveTo(xMaxFreq, 0); freqDomainCtx.lineTo(xMaxFreq, canvasHeight);
+                freqDomainCtx.strokeStyle = 'rgba(0, 0, 255, 0.7)'; freqDomainCtx.lineWidth = 1.5; freqDomainCtx.stroke();
             }
         }
 
-        function updateFavicon(r, g, b) {
+        function updateFavicon(r, g, b) { 
             if (!faviconLink) return; 
             const canvas = document.createElement('canvas');
             const size = 32; 
-            canvas.width = size;
-            canvas.height = size;
+            canvas.width = size; canvas.height = size;
             const ctx = canvas.getContext('2d');
-            ctx.beginPath();
-            ctx.arc(size / 2, size / 2, size / 2, 0, 2 * Math.PI, false);
-            ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
-            ctx.fill();
+            ctx.beginPath(); ctx.arc(size / 2, size / 2, size / 2, 0, 2 * Math.PI, false);
+            ctx.fillStyle = `rgb(${r}, ${g}, ${b})`; ctx.fill();
             faviconLink.href = canvas.toDataURL('image/png');
         }
 
-        function updateColorBox() {
+        function updateColorPresentation() {
+            if (!colorCanvasElement || colorCanvasElement.width === 0 || colorCanvasElement.height === 0 || !colorCtx) return; 
+            if (currentDisplayMode === 'waterfall' && (!offscreenColorCanvas || !offscreenColorCtx)) return; // Need offscreen for waterfall
+
+            const dpr = window.devicePixelRatio || 1;
+            const scaledWidth = colorCanvasElement.width / dpr; // Logical width
+            const scaledHeight = colorCanvasElement.height / dpr; // Logical height
+            const physicalWidth = colorCanvasElement.width; // Physical width
+            const physicalHeight = colorCanvasElement.height; // Physical height
+
+
             if (!frequencyDataArray || !audioContext) {
-                const defaultR = 31, defaultG = 41, defaultB = 55;
-                colorBox.style.backgroundColor = `rgb(${defaultR}, ${defaultG}, ${defaultB})`; 
-                updateFavicon(defaultR, defaultG, defaultB); 
+                lastCalculatedRgbColor = 'rgb(0,0,0)';
+                if (currentDisplayMode === 'static') {
+                    colorCtx.fillStyle = lastCalculatedRgbColor;
+                    colorCtx.fillRect(0, 0, scaledWidth, scaledHeight);
+                } else if (offscreenColorCtx) { // Also update offscreen if it's the source for waterfall
+                    offscreenColorCtx.fillStyle = lastCalculatedRgbColor;
+                    offscreenColorCtx.fillRect(0,0, physicalWidth, physicalHeight);
+                    colorCtx.drawImage(offscreenColorCanvas, 0, 0, scaledWidth, scaledHeight);
+                }
+                updateFavicon(0,0,0);
                 return;
             }
+
             let totalMagR = 0, countR = 0;
             let totalMagG = 0, countG = 0;
             let totalMagB = 0, countB = 0;
+
             if (minFreqColorMap >= maxFreqColorMap) { 
-                const defaultR = 31, defaultG = 41, defaultB = 55;
-                colorBox.style.backgroundColor = `rgb(${defaultR}, ${defaultG}, ${defaultB})`;
-                updateFavicon(defaultR, defaultG, defaultB); 
+                lastCalculatedRgbColor = 'rgb(0,0,0)';
+                if (currentDisplayMode === 'static') {
+                    colorCtx.fillStyle = lastCalculatedRgbColor;
+                    colorCtx.fillRect(0, 0, scaledWidth, scaledHeight);
+                } else if (offscreenColorCtx) {
+                    offscreenColorCtx.fillStyle = lastCalculatedRgbColor;
+                    offscreenColorCtx.fillRect(0,0, physicalWidth, physicalHeight);
+                    colorCtx.drawImage(offscreenColorCanvas, 0, 0, scaledWidth, scaledHeight);
+                }
+                updateFavicon(0,0,0);
                 return;
             }
+
             const colorBandWidth = (maxFreqColorMap - minFreqColorMap) / 3.0; 
             const rBandEnd = minFreqColorMap + colorBandWidth;
             const gBandEnd = minFreqColorMap + 2 * colorBandWidth;
             const binFreqResolution = audioContext.sampleRate / FFT_SIZE;
+
             for (let i = 0; i < analyser.frequencyBinCount; i++) {
                 const freq = i * binFreqResolution; 
                 const mag = frequencyDataArray[i];  
                 if (mag > powerThreshold && freq >= minFreqColorMap && freq <= maxFreqColorMap) {
-                    if (freq < rBandEnd) { 
-                        totalMagR += mag;
-                        countR++;
-                    } else if (freq < gBandEnd) { 
-                        totalMagG += mag;
-                        countG++;
-                    } else { 
-                        totalMagB += mag;
-                        countB++;
-                    }
+                    if (freq < rBandEnd) { totalMagR += mag; countR++; } 
+                    else if (freq < gBandEnd) { totalMagG += mag; countG++; } 
+                    else { totalMagB += mag; countB++; }
                 }
             }
+
             const r = (countR > 0) ? Math.floor(totalMagR / countR) : 0;
             const g = (countG > 0) ? Math.floor(totalMagG / countG) : 0;
             const b = (countB > 0) ? Math.floor(totalMagB / countB) : 0;
@@ -556,12 +882,33 @@
             const finalR = Math.min(255, Math.floor(r * intensityFactor));
             const finalG = Math.min(255, Math.floor(g * intensityFactor));
             const finalB = Math.min(255, Math.floor(b * intensityFactor));
-            colorBox.style.backgroundColor = `rgb(${finalR}, ${finalG}, ${finalB})`;
+
+            lastCalculatedRgbColor = `rgb(${finalR}, ${finalG}, ${finalB})`;
             updateFavicon(finalR, finalG, finalB); 
+
+            if (currentDisplayMode === 'static') {
+                colorCtx.fillStyle = lastCalculatedRgbColor;
+                colorCtx.fillRect(0, 0, scaledWidth, scaledHeight);
+            } else { // Waterfall mode using offscreen canvas
+                const physicalShiftAmount = Math.round(Math.max(0.1, waterfallSpeed) * dpr);
+
+                // 1. Draw existing (shifted) offscreenColorCanvas content to itself (or a second temp if needed, but direct might be fine)
+                //    Source is the current offscreenColorCanvas
+                //    Destination is also offscreenColorCanvas, shifted
+                offscreenColorCtx.drawImage(offscreenColorCanvas,
+                                   physicalShiftAmount, 0, physicalWidth - physicalShiftAmount, physicalHeight, 
+                                   0, 0, physicalWidth - physicalShiftAmount, physicalHeight); 
+                
+                // 2. Draw the new color band on the right edge of the offscreenColorCanvas
+                offscreenColorCtx.fillStyle = lastCalculatedRgbColor;
+                offscreenColorCtx.fillRect(physicalWidth - physicalShiftAmount, 0, physicalShiftAmount, physicalHeight);
+
+                // 3. Draw the updated offscreenColorCanvas to the visible colorCanvasElement
+                colorCtx.clearRect(0,0, scaledWidth, scaledHeight); // Clear visible canvas
+                colorCtx.drawImage(offscreenColorCanvas, 0, 0, scaledWidth, scaledHeight);
+            }
         }
-
-        updateSliderValueDisplays();
-
+        updateSliderValueDisplays(); 
     </script>
 </body>
 </html>
