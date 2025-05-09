@@ -50,12 +50,6 @@
             pointer-events: none; 
         }
 
-        @media (hover: hover) and (pointer: fine) {
-            .tooltip-container:hover .tooltip {
-                /* visibility: visible; opacity: 1; pointer-events: auto; -- Handled by JS for positioning */
-            }
-        }
-
         .tooltip.tooltip-active {
             visibility: visible;
             opacity: 1;
@@ -99,7 +93,7 @@
                         <h2 class="text-lg sm:text-xl font-semibold mb-3 text-gray-700">Output Color</h2>
                         <canvas id="colorCanvas" class="w-full h-32 sm:h-40 rounded-lg shadow-inner border-2 border-gray-200"></canvas>
                         <div class="tooltip-container text-center">
-                            <p id="tooltipTrigger" class="text-xs text-gray-500 mt-1 cursor-help underline decoration-dotted decoration-gray-400 hover:decoration-indigo-500">
+                            <p id="tooltipTrigger" class="text-xs text-gray-500 mt-1 cursor-pointer underline decoration-dotted decoration-gray-400 hover:decoration-indigo-500 active:decoration-indigo-700">
                                 How is color derived from audio?
                             </p>
                             <div id="infoTooltip" class="tooltip w-72 sm:w-80 md:w-96 max-h-[50vh] overflow-y-auto p-3 bg-gray-800 text-white text-xs rounded-lg shadow-xl">
@@ -158,7 +152,7 @@
                     </div>
                     <div class="space-y-1">
                         <label for="maxFreq" class="block text-sm font-medium text-gray-600">Max Frequency (Hz): <span id="maxFreqValue" class="font-bold text-indigo-600">5000</span></label>
-                        <input type="range" id="maxFreq" min="100" max="20000" value="2500" step="10" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600">
+                        <input type="range" id="maxFreq" min="100" max="20000" value="5000" step="10" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600">
                     </div>
                     <div class="space-y-1">
                         <label for="smoothingFactor" class="block text-sm font-medium text-gray-600">Smoothing Factor: <span id="smoothingFactorValue" class="font-bold text-indigo-600">0.8</span></label>
@@ -204,8 +198,8 @@
 
         const colorCanvasElement = document.getElementById('colorCanvas'); 
         let colorCtx; 
-        let offscreenColorCanvas = null; // For waterfall
-        let offscreenColorCtx = null;   // For waterfall
+        let offscreenColorCanvas = null; 
+        let offscreenColorCtx = null;   
 
         const modeStaticRadio = document.getElementById('modeStatic');
         const modeWaterfallRadio = document.getElementById('modeWaterfall');
@@ -238,6 +232,11 @@
         let currentDisplayMode = 'static'; 
         let waterfallSpeed = parseFloat(waterfallSpeedSlider.value); 
         let lastCalculatedRgbColor = 'rgb(0,0,0)'; 
+        const AXIS_LABEL_COLOR = 'rgb(100, 100, 100)'; // Color for axis labels
+        const AXIS_LINE_COLOR = 'rgb(200, 200, 200)'; // Color for axis lines/ticks
+        const CHART_PADDING_BOTTOM = 20; // Space for X-axis labels
+        const CHART_PADDING_LEFT = 5; // Small left padding for Y-axis (if ever added)
+
 
         // --- Initialization ---
         window.addEventListener('load', () => {
@@ -250,15 +249,13 @@
                 if (freqDomainCanvas) { freqDomainCtx = freqDomainCanvas.getContext('2d'); if(freqDomainCtx) freqDomainCtx.imageSmoothingEnabled = false; }
                 if (colorCanvasElement) { colorCtx = colorCanvasElement.getContext('2d'); if(colorCtx) colorCtx.imageSmoothingEnabled = false; }
                 
-                // Initialize offscreen canvas for waterfall
                 if (colorCanvasElement && colorCanvasElement.width > 0 && colorCanvasElement.height > 0) {
                     offscreenColorCanvas = document.createElement('canvas');
-                    offscreenColorCanvas.width = colorCanvasElement.width; // Physical pixels
-                    offscreenColorCanvas.height = colorCanvasElement.height; // Physical pixels
+                    offscreenColorCanvas.width = colorCanvasElement.width; 
+                    offscreenColorCanvas.height = colorCanvasElement.height; 
                     offscreenColorCtx = offscreenColorCanvas.getContext('2d');
                     if (offscreenColorCtx) {
                         offscreenColorCtx.imageSmoothingEnabled = false;
-                        // Fill initially with black
                         offscreenColorCtx.fillStyle = 'rgb(0,0,0)';
                         offscreenColorCtx.fillRect(0, 0, offscreenColorCanvas.width, offscreenColorCanvas.height);
                     }
@@ -277,7 +274,6 @@
                 const dpr = window.devicePixelRatio || 1;
                 colorCtx.fillStyle = 'rgb(0,0,0)';
                 colorCtx.fillRect(0, 0, colorCanvasElement.width / dpr, colorCanvasElement.height / dpr);
-                 // Also initialize the offscreen canvas if in waterfall mode
                 if (offscreenColorCtx) {
                     offscreenColorCtx.fillStyle = 'rgb(0,0,0)';
                     offscreenColorCtx.fillRect(0,0, offscreenColorCanvas.width, offscreenColorCanvas.height);
@@ -317,7 +313,7 @@
             const ctx = canvasElement.getContext('2d');
             if (ctx) { 
                  ctx.scale(dpr, dpr); 
-                 ctx.imageSmoothingEnabled = false; // Ensure crisp rendering
+                 ctx.imageSmoothingEnabled = false; 
             }
         }
 
@@ -335,7 +331,6 @@
                 if (freqDomainCanvas) { freqDomainCtx = freqDomainCanvas.getContext('2d'); if(freqDomainCtx) freqDomainCtx.imageSmoothingEnabled = false; }
                 if (colorCanvasElement) { colorCtx = colorCanvasElement.getContext('2d'); if(colorCtx) colorCtx.imageSmoothingEnabled = false; }
 
-                // Re-initialize or resize offscreen canvas
                 if (colorCanvasElement && colorCanvasElement.width > 0 && colorCanvasElement.height > 0) {
                     if (!offscreenColorCanvas || offscreenColorCanvas.width !== colorCanvasElement.width || offscreenColorCanvas.height !== colorCanvasElement.height) {
                         offscreenColorCanvas = document.createElement('canvas');
@@ -344,7 +339,7 @@
                         offscreenColorCtx = offscreenColorCanvas.getContext('2d');
                         if (offscreenColorCtx) {
                              offscreenColorCtx.imageSmoothingEnabled = false;
-                             if (oldOffscreenData) { // Try to restore old data if possible (might be stretched/clipped)
+                             if (oldOffscreenData) { 
                                 offscreenColorCtx.putImageData(oldOffscreenData, 0, 0);
                              } else {
                                 offscreenColorCtx.fillStyle = 'rgb(0,0,0)';
@@ -354,7 +349,6 @@
                     }
                 }
 
-
                 if (currentDisplayMode === 'static' && colorCtx) {
                      const dpr = window.devicePixelRatio || 1;
                      if (colorCanvasElement && colorCanvasElement.width > 0 && colorCanvasElement.height > 0) { 
@@ -362,12 +356,10 @@
                         colorCtx.fillRect(0, 0, colorCanvasElement.width / dpr, colorCanvasElement.height / dpr);
                      }
                 } else if (currentDisplayMode === 'waterfall' && colorCtx && offscreenColorCanvas) {
-                    // Redraw waterfall from its current state
                      const dpr = window.devicePixelRatio || 1;
                      colorCtx.clearRect(0, 0, colorCanvasElement.width / dpr, colorCanvasElement.height / dpr);
                      colorCtx.drawImage(offscreenColorCanvas, 0, 0, colorCanvasElement.width / dpr, colorCanvasElement.height / dpr);
                 }
-
 
                 if (rafId) { 
                     if (timeDomainDataArray && frequencyDataArray) { 
@@ -383,52 +375,46 @@
         function setupTooltipToggle() {
             if (tooltipTrigger && infoTooltip) {
                 const showTooltip = () => {
-                    // Temporarily make it visible to calculate dimensions correctly if needed
-                    infoTooltip.style.visibility = 'hidden'; // Keep it from flashing
-                    infoTooltip.classList.add('tooltip-active'); // Add active to apply styles for measurement
+                    infoTooltip.style.visibility = 'hidden'; 
+                    infoTooltip.classList.add('tooltip-active'); 
                     
                     const tooltipRect = infoTooltip.getBoundingClientRect();
                     const triggerRect = tooltipTrigger.getBoundingClientRect();
                     const containerRect = tooltipTrigger.closest('.tooltip-container').getBoundingClientRect();
 
-                    let newTop = triggerRect.top - containerRect.top - tooltipRect.height - 8; // 8px margin (0.5rem)
-                    let newBottom = 'auto';
+                    let newTopStyle = 'auto';
+                    let newBottomStyle = 'calc(100% + 0.5rem)'; 
 
-                    if ((triggerRect.top - tooltipRect.height - 8) < 0) { // Check if it overflows viewport top
-                        newTop = triggerRect.bottom - containerRect.top + 8; // Position below trigger
-                        newBottom = 'auto';
-                        infoTooltip.style.top = `${newTop}px`;
-                        infoTooltip.style.bottom = newBottom;
-                    } else {
-                        infoTooltip.style.bottom = 'calc(100% + 0.5rem)';
-                        infoTooltip.style.top = 'auto';
+                    if ((triggerRect.top - tooltipRect.height - 8) < 0) { 
+                        newTopStyle = `${triggerRect.bottom - containerRect.top + 8}px`; 
+                        newBottomStyle = 'auto';
                     }
+                    infoTooltip.style.top = newTopStyle;
+                    infoTooltip.style.bottom = newBottomStyle;
                     
-                    // Horizontal centering/adjustment
-                    let newLeft = '50%';
-                    let newTransform = 'translateX(-50%)';
+                    let newLeftStyle = '50%';
+                    let newTransformStyle = 'translateX(-50%)';
+                    let newRightStyle = 'auto';
                     
-                    // Recalculate after potential vertical flip for accurate horizontal check
                     const finalTooltipRect = infoTooltip.getBoundingClientRect(); 
 
                     if (finalTooltipRect.left < 0) {
-                        newLeft = '0px'; // Align to left edge of container
-                        newTransform = 'translateX(0)';
+                        newLeftStyle = '0px'; 
+                        newTransformStyle = 'translateX(0)';
                     } else if (finalTooltipRect.right > window.innerWidth) {
-                        newLeft = 'auto';
-                        infoTooltip.style.right = '0px'; // Align to right edge of container
-                        newTransform = 'translateX(0)';
+                        newLeftStyle = 'auto';
+                        newRightStyle = '0px'; 
+                        newTransformStyle = 'translateX(0)';
                     }
                     
-                    infoTooltip.style.left = newLeft;
-                    if (newLeft !== 'auto') infoTooltip.style.right = 'auto'; // Avoid conflicting right style
-                    infoTooltip.style.transform = newTransform;
-                    infoTooltip.style.visibility = 'visible'; // Make it truly visible
+                    infoTooltip.style.left = newLeftStyle;
+                    infoTooltip.style.right = newRightStyle;
+                    infoTooltip.style.transform = newTransformStyle;
+                    infoTooltip.style.visibility = 'visible'; 
                 };
 
                 const hideTooltip = () => {
                     infoTooltip.classList.remove('tooltip-active');
-                     // Reset styles to default for next show
                     infoTooltip.style.top = 'auto';
                     infoTooltip.style.bottom = 'calc(100% + 0.5rem)';
                     infoTooltip.style.left = '50%';
@@ -456,11 +442,6 @@
                         hideTooltip();
                     }
                 });
-
-                if (window.matchMedia('(hover: hover) and (pointer: fine)').matches) {
-                    tooltipTrigger.addEventListener('mouseenter', showTooltip);
-                    tooltipTrigger.addEventListener('mouseleave', hideTooltip);
-                }
             }
         }
 
@@ -547,10 +528,9 @@
             if (modeWaterfallRadio.checked) {
                 currentDisplayMode = 'waterfall';
                 waterfallControlsContainer.classList.remove('hidden');
-                 // Ensure offscreen canvas is ready and filled correctly when switching to waterfall
                 if (offscreenColorCtx && offscreenColorCanvas && colorCtx) {
                     const dpr = window.devicePixelRatio || 1;
-                    offscreenColorCtx.fillStyle = lastCalculatedRgbColor; // Or 'rgb(0,0,0)' if you want it to clear
+                    offscreenColorCtx.fillStyle = lastCalculatedRgbColor; 
                     offscreenColorCtx.fillRect(0,0, offscreenColorCanvas.width, offscreenColorCanvas.height);
                     colorCtx.drawImage(offscreenColorCanvas, 0,0, colorCanvasElement.width/dpr, colorCanvasElement.height/dpr);
                 }
@@ -694,29 +674,38 @@
 
         function clearVisualizations() { 
             const dpr = window.devicePixelRatio || 1;
+            const chartAreaHeightTime = timeDomainCanvas && timeDomainCanvas.height > 0 ? (timeDomainCanvas.height / dpr) - CHART_PADDING_BOTTOM : 150 - CHART_PADDING_BOTTOM;
+            const chartAreaHeightFreq = freqDomainCanvas && freqDomainCanvas.height > 0 ? (freqDomainCanvas.height / dpr) - CHART_PADDING_BOTTOM : 150 - CHART_PADDING_BOTTOM;
+
             if (timeDomainCtx && timeDomainCanvas && timeDomainCanvas.width > 0 && timeDomainCanvas.height > 0) {
                 const canvasWidth = timeDomainCanvas.width / dpr;
-                const canvasHeight = timeDomainCanvas.height / dpr;
-                timeDomainCtx.clearRect(0, 0, canvasWidth, canvasHeight);
-                timeDomainCtx.fillStyle = 'rgb(150,150,150)'; 
+                timeDomainCtx.clearRect(0, 0, canvasWidth, chartAreaHeightTime + CHART_PADDING_BOTTOM); // Clear entire canvas including label area
+                timeDomainCtx.fillStyle = 'rgb(243, 244, 246)'; // Background for chart area
+                timeDomainCtx.fillRect(CHART_PADDING_LEFT, 0, canvasWidth - CHART_PADDING_LEFT, chartAreaHeightTime);
+                
+                timeDomainCtx.fillStyle = AXIS_LABEL_COLOR; 
                 timeDomainCtx.textAlign = 'center';
                 timeDomainCtx.font = "12px Inter"; 
-                timeDomainCtx.fillText("No audio data", canvasWidth / 2, canvasHeight / 2);
+                timeDomainCtx.fillText("No audio data", canvasWidth / 2, chartAreaHeightTime / 2);
+                drawTimeAxisMarkers(timeDomainCtx, canvasWidth, chartAreaHeightTime, 0); // Draw empty axis
             }
             if (freqDomainCtx && freqDomainCanvas && freqDomainCanvas.width > 0 && freqDomainCanvas.height > 0) {
                 const canvasWidth = freqDomainCanvas.width / dpr;
-                const canvasHeight = freqDomainCanvas.height / dpr;
-                freqDomainCtx.clearRect(0, 0, canvasWidth, canvasHeight);
-                freqDomainCtx.fillStyle = 'rgb(150,150,150)';
+                freqDomainCtx.clearRect(0, 0, canvasWidth, chartAreaHeightFreq + CHART_PADDING_BOTTOM); // Clear entire canvas
+                freqDomainCtx.fillStyle = 'rgb(243, 244, 246)'; // Background for chart area
+                freqDomainCtx.fillRect(CHART_PADDING_LEFT, 0, canvasWidth - CHART_PADDING_LEFT, chartAreaHeightFreq);
+
+                freqDomainCtx.fillStyle = AXIS_LABEL_COLOR;
                 freqDomainCtx.textAlign = 'center';
                 freqDomainCtx.font = "12px Inter"; 
-                freqDomainCtx.fillText("No audio data", canvasWidth / 2, canvasHeight / 2);
+                freqDomainCtx.fillText("No audio data", canvasWidth / 2, chartAreaHeightFreq / 2);
+                drawFrequencyAxisMarkers(freqDomainCtx, canvasWidth, chartAreaHeightFreq, 0); // Draw empty axis
             }
             if (colorCtx && colorCanvasElement && colorCanvasElement.width > 0 && colorCanvasElement.height > 0) { 
                 colorCtx.fillStyle = 'rgb(0,0,0)';
                 colorCtx.fillRect(0, 0, colorCanvasElement.width / dpr, colorCanvasElement.height / dpr);
             }
-             if (offscreenColorCtx && offscreenColorCanvas) { // Also clear/reset offscreen canvas
+             if (offscreenColorCtx && offscreenColorCanvas) { 
                 offscreenColorCtx.fillStyle = 'rgb(0,0,0)';
                 offscreenColorCtx.fillRect(0,0, offscreenColorCanvas.width, offscreenColorCanvas.height);
             }
@@ -737,22 +726,102 @@
             
             rafId = requestAnimationFrame(visualize); 
         }
+        
+        function drawTimeAxisMarkers(ctx, canvasWidth, chartHeight, totalTimeDuration) {
+            const numMarkers = 5; // Desired number of markers
+            ctx.beginPath();
+            ctx.strokeStyle = AXIS_LINE_COLOR;
+            ctx.lineWidth = 1;
+            ctx.moveTo(CHART_PADDING_LEFT, chartHeight);
+            ctx.lineTo(canvasWidth, chartHeight); // Draw X axis line
+            ctx.stroke();
+
+            ctx.fillStyle = AXIS_LABEL_COLOR;
+            ctx.font = '10px Inter';
+            ctx.textAlign = 'center';
+
+            for (let i = 0; i <= numMarkers; i++) {
+                const x = CHART_PADDING_LEFT + (i / numMarkers) * (canvasWidth - CHART_PADDING_LEFT);
+                const time = (i / numMarkers) * totalTimeDuration;
+                
+                ctx.beginPath();
+                ctx.moveTo(x, chartHeight);
+                ctx.lineTo(x, chartHeight + 4); // Tick mark
+                ctx.stroke();
+                
+                let label = '';
+                if (totalTimeDuration === 0) { // For "No data" state
+                    label = (i === 0 || i === numMarkers) ? '0s' : '';
+                } else if (totalTimeDuration < 1) { // If less than 1 second, use ms
+                    label = `${(time * 1000).toFixed(0)}ms`;
+                } else {
+                    label = `${time.toFixed(2)}s`;
+                }
+                if (label) ctx.fillText(label, x, chartHeight + 14);
+            }
+        }
+
+
+        function drawFrequencyAxisMarkers(ctx, canvasWidth, chartHeight, maxFreqOnChart) {
+            const numMarkers = 5;
+            ctx.beginPath();
+            ctx.strokeStyle = AXIS_LINE_COLOR;
+            ctx.lineWidth = 1;
+            ctx.moveTo(CHART_PADDING_LEFT, chartHeight);
+            ctx.lineTo(canvasWidth, chartHeight); // Draw X axis line
+            ctx.stroke();
+
+            ctx.fillStyle = AXIS_LABEL_COLOR;
+            ctx.font = '10px Inter';
+            ctx.textAlign = 'center';
+
+            for (let i = 0; i <= numMarkers; i++) {
+                const x = CHART_PADDING_LEFT + (i / numMarkers) * (canvasWidth - CHART_PADDING_LEFT);
+                const freq = (i / numMarkers) * maxFreqOnChart;
+                
+                ctx.beginPath();
+                ctx.moveTo(x, chartHeight);
+                ctx.lineTo(x, chartHeight + 4); // Tick mark
+                ctx.stroke();
+
+                let label = '';
+                 if (maxFreqOnChart === 0) { // For "No data" state
+                    label = (i === 0 || i === numMarkers) ? '0Hz' : '';
+                } else if (maxFreqOnChart >= 1000) {
+                    label = `${(freq / 1000).toFixed(1)}kHz`;
+                } else {
+                    label = `${freq.toFixed(0)}Hz`;
+                }
+                if (label) ctx.fillText(label, x, chartHeight + 14);
+            }
+        }
+
 
         function drawTimeDomain() { 
-            if (!timeDomainCtx || !timeDomainDataArray || !timeDomainCanvas || timeDomainCanvas.width === 0 || timeDomainCanvas.height === 0) return;
+            if (!timeDomainCtx || !timeDomainDataArray || !timeDomainCanvas || timeDomainCanvas.width === 0 || timeDomainCanvas.height === 0 || !audioContext) return;
             const dpr = window.devicePixelRatio || 1;
             const canvasWidth = timeDomainCanvas.width / dpr;
-            const canvasHeight = timeDomainCanvas.height / dpr;
-            timeDomainCtx.fillStyle = 'rgb(243, 244, 246)'; 
-            timeDomainCtx.fillRect(0, 0, canvasWidth, canvasHeight);
+            const actualCanvasHeight = timeDomainCanvas.height / dpr;
+            const chartHeight = actualCanvasHeight - CHART_PADDING_BOTTOM;
+
+
+            timeDomainCtx.clearRect(0, 0, canvasWidth, actualCanvasHeight); // Clear entire canvas including label area
+            timeDomainCtx.fillStyle = 'rgb(243, 244, 246)'; // Background for chart area
+            timeDomainCtx.fillRect(CHART_PADDING_LEFT, 0, canvasWidth - CHART_PADDING_LEFT, chartHeight);
+            
             timeDomainCtx.lineWidth = 1.5; 
             timeDomainCtx.strokeStyle = 'rgb(79, 70, 229)'; 
             timeDomainCtx.beginPath();
-            const sliceWidth = canvasWidth * 1.0 / analyser.fftSize;
-            let x = 0;
+            
+            // Adjust sliceWidth to account for padding
+            const plotAreaWidth = canvasWidth - CHART_PADDING_LEFT;
+            const sliceWidth = plotAreaWidth / analyser.fftSize;
+            let x = CHART_PADDING_LEFT;
+
             for (let i = 0; i < analyser.fftSize; i++) {
                 const v = timeDomainDataArray[i] / 128.0; 
-                const y = v * canvasHeight / 2;
+                const y = v * chartHeight / 2; // Scale to chartHeight
+
                 if (i === 0) {
                     timeDomainCtx.moveTo(x, y);
                 } else {
@@ -760,49 +829,65 @@
                 }
                 x += sliceWidth;
             }
-            timeDomainCtx.lineTo(canvasWidth, canvasHeight / 2); 
+            timeDomainCtx.lineTo(canvasWidth, chartHeight / 2); 
             timeDomainCtx.stroke();
+
+            const totalTimeDuration = analyser.fftSize / audioContext.sampleRate;
+            drawTimeAxisMarkers(timeDomainCtx, canvasWidth, chartHeight, totalTimeDuration);
         }
+
         function drawFrequencyDomain() { 
             if (!freqDomainCtx || !audioContext || !frequencyDataArray || !freqDomainCanvas || freqDomainCanvas.width === 0 || freqDomainCanvas.height === 0) return;
             const dpr = window.devicePixelRatio || 1;
             const canvasWidth = freqDomainCanvas.width / dpr;
-            const canvasHeight = freqDomainCanvas.height / dpr;
-            freqDomainCtx.fillStyle = 'rgb(243, 244, 246)'; 
-            freqDomainCtx.fillRect(0, 0, canvasWidth, canvasHeight);
+            const actualCanvasHeight = freqDomainCanvas.height / dpr;
+            const chartHeight = actualCanvasHeight - CHART_PADDING_BOTTOM;
+
+            freqDomainCtx.clearRect(0, 0, canvasWidth, actualCanvasHeight); // Clear entire canvas
+            freqDomainCtx.fillStyle = 'rgb(243, 244, 246)'; // Background for chart area
+            freqDomainCtx.fillRect(CHART_PADDING_LEFT, 0, canvasWidth - CHART_PADDING_LEFT, chartHeight);
+            
             const numBins = analyser.frequencyBinCount;
             const binFreqResolution = audioContext.sampleRate / FFT_SIZE;
             const maxFreqOnChart = Math.min(20000, audioContext.sampleRate / 2, Math.max(maxFreqColorMap + 1000, 5000));
             const binsToPlotOnChart = Math.floor(maxFreqOnChart / binFreqResolution);
             
-            if (binsToPlotOnChart <= 0) return; 
+            if (binsToPlotOnChart <= 0) { // Draw empty axis if no bins
+                drawFrequencyAxisMarkers(freqDomainCtx, canvasWidth, chartHeight, maxFreqOnChart);
+                return;
+            }
 
-            const barTotalWidth = canvasWidth / binsToPlotOnChart;
+            const plotAreaWidth = canvasWidth - CHART_PADDING_LEFT;
+            const barTotalWidth = plotAreaWidth / binsToPlotOnChart;
             const barWidth = barTotalWidth * 0.9; 
             let barHeight;
-            let currentX = 0;
+            let currentX = CHART_PADDING_LEFT;
+
             for (let i = 0; i < binsToPlotOnChart; i++) {
-                barHeight = (frequencyDataArray[i] / 255.0) * canvasHeight; 
+                barHeight = (frequencyDataArray[i] / 255.0) * chartHeight; // Scale to chartHeight
                 const hue = (i / binsToPlotOnChart) * 300; 
                 freqDomainCtx.fillStyle = `hsl(${hue}, 75%, 55%)`;
-                freqDomainCtx.fillRect(currentX + (barTotalWidth - barWidth)/2 , canvasHeight - barHeight, barWidth, barHeight);
+                freqDomainCtx.fillRect(currentX + (barTotalWidth - barWidth)/2 , chartHeight - barHeight, barWidth, barHeight);
                 currentX += barTotalWidth; 
             }
-             if (powerThreshold > 0) {
-                const yPowerThreshold = canvasHeight - (powerThreshold / 255.0) * canvasHeight;
-                freqDomainCtx.beginPath(); freqDomainCtx.moveTo(0, yPowerThreshold); freqDomainCtx.lineTo(canvasWidth, yPowerThreshold);
+            
+            // Draw threshold lines relative to the chart area
+            if (powerThreshold > 0) {
+                const yPowerThreshold = chartHeight - (powerThreshold / 255.0) * chartHeight;
+                freqDomainCtx.beginPath(); freqDomainCtx.moveTo(CHART_PADDING_LEFT, yPowerThreshold); freqDomainCtx.lineTo(canvasWidth, yPowerThreshold);
                 freqDomainCtx.strokeStyle = 'rgba(255, 0, 0, 0.7)'; freqDomainCtx.lineWidth = 1; freqDomainCtx.setLineDash([4, 2]); freqDomainCtx.stroke(); freqDomainCtx.setLineDash([]); 
             }
             if (minFreqColorMap > 0 && minFreqColorMap <= maxFreqOnChart) {
-                const xMinFreq = (minFreqColorMap / maxFreqOnChart) * canvasWidth;
-                freqDomainCtx.beginPath(); freqDomainCtx.moveTo(xMinFreq, 0); freqDomainCtx.lineTo(xMinFreq, canvasHeight);
+                const xMinFreq = CHART_PADDING_LEFT + (minFreqColorMap / maxFreqOnChart) * plotAreaWidth;
+                freqDomainCtx.beginPath(); freqDomainCtx.moveTo(xMinFreq, 0); freqDomainCtx.lineTo(xMinFreq, chartHeight);
                 freqDomainCtx.strokeStyle = 'rgba(0, 255, 0, 0.7)'; freqDomainCtx.lineWidth = 1.5; freqDomainCtx.stroke();
             }
             if (maxFreqColorMap > 0 && maxFreqColorMap <= maxFreqOnChart) {
-                const xMaxFreq = (maxFreqColorMap / maxFreqOnChart) * canvasWidth;
-                freqDomainCtx.beginPath(); freqDomainCtx.moveTo(xMaxFreq, 0); freqDomainCtx.lineTo(xMaxFreq, canvasHeight);
+                const xMaxFreq = CHART_PADDING_LEFT + (maxFreqColorMap / maxFreqOnChart) * plotAreaWidth;
+                freqDomainCtx.beginPath(); freqDomainCtx.moveTo(xMaxFreq, 0); freqDomainCtx.lineTo(xMaxFreq, chartHeight);
                 freqDomainCtx.strokeStyle = 'rgba(0, 0, 255, 0.7)'; freqDomainCtx.lineWidth = 1.5; freqDomainCtx.stroke();
             }
+            drawFrequencyAxisMarkers(freqDomainCtx, canvasWidth, chartHeight, maxFreqOnChart);
         }
 
         function updateFavicon(r, g, b) { 
@@ -818,13 +903,13 @@
 
         function updateColorPresentation() {
             if (!colorCanvasElement || colorCanvasElement.width === 0 || colorCanvasElement.height === 0 || !colorCtx) return; 
-            if (currentDisplayMode === 'waterfall' && (!offscreenColorCanvas || !offscreenColorCtx)) return; // Need offscreen for waterfall
+            if (currentDisplayMode === 'waterfall' && (!offscreenColorCanvas || !offscreenColorCtx)) return;
 
             const dpr = window.devicePixelRatio || 1;
-            const scaledWidth = colorCanvasElement.width / dpr; // Logical width
-            const scaledHeight = colorCanvasElement.height / dpr; // Logical height
-            const physicalWidth = colorCanvasElement.width; // Physical width
-            const physicalHeight = colorCanvasElement.height; // Physical height
+            const scaledWidth = colorCanvasElement.width / dpr; 
+            const scaledHeight = colorCanvasElement.height / dpr; 
+            const physicalWidth = colorCanvasElement.width; 
+            const physicalHeight = colorCanvasElement.height; 
 
 
             if (!frequencyDataArray || !audioContext) {
@@ -832,7 +917,7 @@
                 if (currentDisplayMode === 'static') {
                     colorCtx.fillStyle = lastCalculatedRgbColor;
                     colorCtx.fillRect(0, 0, scaledWidth, scaledHeight);
-                } else if (offscreenColorCtx) { // Also update offscreen if it's the source for waterfall
+                } else if (offscreenColorCtx) { 
                     offscreenColorCtx.fillStyle = lastCalculatedRgbColor;
                     offscreenColorCtx.fillRect(0,0, physicalWidth, physicalHeight);
                     colorCtx.drawImage(offscreenColorCanvas, 0, 0, scaledWidth, scaledHeight);
@@ -889,22 +974,21 @@
             if (currentDisplayMode === 'static') {
                 colorCtx.fillStyle = lastCalculatedRgbColor;
                 colorCtx.fillRect(0, 0, scaledWidth, scaledHeight);
-            } else { // Waterfall mode using offscreen canvas
+            } else { 
                 const physicalShiftAmount = Math.round(Math.max(0.1, waterfallSpeed) * dpr);
 
-                // 1. Draw existing (shifted) offscreenColorCanvas content to itself (or a second temp if needed, but direct might be fine)
-                //    Source is the current offscreenColorCanvas
-                //    Destination is also offscreenColorCanvas, shifted
-                offscreenColorCtx.drawImage(offscreenColorCanvas,
-                                   physicalShiftAmount, 0, physicalWidth - physicalShiftAmount, physicalHeight, 
-                                   0, 0, physicalWidth - physicalShiftAmount, physicalHeight); 
-                
-                // 2. Draw the new color band on the right edge of the offscreenColorCanvas
-                offscreenColorCtx.fillStyle = lastCalculatedRgbColor;
-                offscreenColorCtx.fillRect(physicalWidth - physicalShiftAmount, 0, physicalShiftAmount, physicalHeight);
-
-                // 3. Draw the updated offscreenColorCanvas to the visible colorCanvasElement
-                colorCtx.clearRect(0,0, scaledWidth, scaledHeight); // Clear visible canvas
+                if (physicalShiftAmount > 0 && physicalWidth > physicalShiftAmount) { 
+                    offscreenColorCtx.drawImage(offscreenColorCanvas,
+                                    physicalShiftAmount, 0, physicalWidth - physicalShiftAmount, physicalHeight, 
+                                    0, 0, physicalWidth - physicalShiftAmount, physicalHeight); 
+                    
+                    offscreenColorCtx.fillStyle = lastCalculatedRgbColor;
+                    offscreenColorCtx.fillRect(physicalWidth - physicalShiftAmount, 0, physicalShiftAmount, physicalHeight);
+                } else if (physicalShiftAmount > 0) { 
+                     offscreenColorCtx.fillStyle = lastCalculatedRgbColor;
+                     offscreenColorCtx.fillRect(0, 0, physicalWidth, physicalHeight);
+                }
+                colorCtx.clearRect(0,0, scaledWidth, scaledHeight); 
                 colorCtx.drawImage(offscreenColorCanvas, 0, 0, scaledWidth, scaledHeight);
             }
         }
